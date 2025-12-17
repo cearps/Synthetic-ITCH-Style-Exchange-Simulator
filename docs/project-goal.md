@@ -1,6 +1,12 @@
+# Project goal (high-level)
+
+This document is intentionally copied from the repository `README.md` as a starting point and will evolve over time.
+
+---
+
 # Synthetic ITCH Exchange Simulator
 
-This project is a **deterministic exchange simulator** designed to generate **ITCH-like binary market data over UDP**, enabling realistic backtesting and systems testing _as if consuming a live exchange feed_.
+This project is a **deterministic exchange simulator** designed to generate **ITCH-like binary market data over UDP**, enabling realistic backtesting and systems testing *as if consuming a live exchange feed*.
 
 The simulator focuses on **market microstructure realism**, **wire-level fidelity**, and **replayability**, while remaining modular enough to evolve from simple models to more sophisticated ones without breaking downstream consumers.
 
@@ -9,7 +15,6 @@ The simulator focuses on **market microstructure realism**, **wire-level fidelit
 ## Project Motivation
 
 Most backtests operate on reconstructed books or aggregated data, missing important aspects of real trading systems:
-
 - on-the-wire message ordering,
 - binary decoding,
 - partial packet loss,
@@ -28,7 +33,6 @@ The system is built around a single core principle:
 Market behaviour is simulated upstream, recorded deterministically, and then encoded and streamed downstream.
 
 At a high level:
-
 1. A market simulator generates order flow.
 2. A matching engine processes events and updates the order book.
 3. All events are written to a deterministic, append-only event log.
@@ -72,8 +76,4 @@ The initial focus is on correctness, determinism, and a minimal but realistic ex
 This project is for **research and educational purposes only**.  
 It does not represent or reproduce any specific exchange’s proprietary systems.
 
----
 
-## Documentation
-
-- `docs/README.md` (documentation index)
