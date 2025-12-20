@@ -19,5 +19,6 @@ Create an ADR when you make a decision that is:
 ## ADR index
 
 - [0001 - Record architecture decisions](0001-record-architecture-decisions.md)
+- [0002 - Pipeline Architecture](0002-pipeline-architecture.md)
 
 
