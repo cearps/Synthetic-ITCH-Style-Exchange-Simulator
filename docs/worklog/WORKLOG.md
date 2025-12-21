@@ -45,6 +45,34 @@ AI Assistant
 
 ### Scope
 
+v0 test suite (TDD)
+
+### AI-generated work log
+
+**What changed**: Created comprehensive test suite for v0 implementation following TDD principles. Added tests for all major components: QR-SDP Event Producer (11 tests), Order Book (13 tests), Matching Engine (10 tests), Event Log (12 tests), ITCH Encoder (20 tests), and UDP Streamer (20 tests). Total of 86 new tests covering deterministic behavior, state management, message encoding/decoding, and edge cases. All tests compile successfully but fail as expected since implementation is not yet written.
+
+**Why**: Issue #11 requires implementing tests following TDD principles before writing the actual implementation. Tests are based on QR-SDP and ITCH encoder documentation, ensuring coverage of documented requirements including deterministic behavior, state-dependent intensity calculation, competing Poisson clocks, message format correctness, and packet loss simulation.
+
+**How validated**: All tests compile successfully with CMake and Google Test. Tests are structured to fail initially (TDD approach) and will pass once implementation is added in issue #12. Test structure mirrors source directory structure. Tests cover both happy paths and edge cases (max values, zero quantities, empty messages, etc.).
+
+**Tradeoffs / risks**: Some tests are placeholders that will need refinement once implementation details are known (e.g., producer tests that require book state access). Tests assume certain implementation details that may need adjustment. UDP streamer tests currently pass with stub implementation but will validate real functionality once implemented. Test coverage is comprehensive but may need expansion based on implementation complexity.
+
+### Manual additions
+
+(Human edits, notes, links, context)
+
+---
+
+### Date
+
+2025-12-21
+
+### Author
+
+AI Assistant
+
+### Scope
+
 Build, test, and run plan
 
 ### AI-generated work log
