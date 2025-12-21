@@ -94,13 +94,26 @@ tests/
 ### Running Tests
 
 #### Docker (Recommended)
+
+**First time setup:**
+```bash
+# Build the test image (downloads Google Test - may take several minutes)
+docker-compose -f docker/docker-compose.yml build test
+```
+
+**Running tests:**
 ```bash
 # Run all tests
-docker-compose run --rm test
+docker-compose -f docker/docker-compose.yml run --rm test
 
-# Run specific test
-docker-compose run --rm test tests/core/test_events
+# List available tests
+docker-compose -f docker/docker-compose.yml run --rm test /app/build/tests --gtest_list_tests
+
+# Run specific test by name
+docker-compose -f docker/docker-compose.yml run --rm test /app/build/tests --gtest_filter=EventsTest.*
 ```
+
+**Note:** The first build will be slower as it downloads and compiles Google Test. Subsequent builds use Docker layer caching and are much faster.
 
 #### Native
 ```bash
@@ -164,7 +177,7 @@ TEST(OrderEventTest, CreateOrderEvent) {
 
 ```bash
 # Docker
-docker-compose run --rm simulator
+docker-compose -f docker/docker-compose.yml run --rm simulator
 
 # Native
 ./build/itch_simulator
@@ -198,8 +211,9 @@ Use Docker for consistent builds across environments:
 # Example GitHub Actions / GitLab CI
 build:
   script:
-    - docker-compose build
-    - docker-compose run --rm test
+    - docker-compose -f docker/docker-compose.yml build build
+    - docker-compose -f docker/docker-compose.yml build test
+    - docker-compose -f docker/docker-compose.yml run --rm test
 ```
 
 ### Build Artifacts
@@ -220,7 +234,7 @@ build:
 
 2. **Run Tests**:
    ```bash
-   docker-compose run --rm test
+   docker-compose -f docker/docker-compose.yml run --rm test
    ```
 
 3. **Build Verification**:
