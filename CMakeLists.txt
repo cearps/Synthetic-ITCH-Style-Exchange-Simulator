@@ -100,6 +100,7 @@ if(BUILD_TESTING)
         tests/matching/test_matching_engine.cpp
         tests/logging/test_event_log.cpp
         tests/encoding/test_itch_encoder.cpp
+        tests/streaming/test_udp_streamer.cpp
         # Add more test files here as they are created
     )
     
