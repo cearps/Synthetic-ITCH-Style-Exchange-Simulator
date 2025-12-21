@@ -280,12 +280,13 @@ OrderEvent QRSDPEventProducer::generate_cancel_bid(const BookState& state) {
         auto limit_book = std::dynamic_pointer_cast<LimitOrderBook>(order_book_);
         if (limit_book) {
             auto order = limit_book->get_first_bid_order_at_price(state.best_bid);
-            if (order) {
+            if (order && order->is_active()) {
                 event.order_id = order->id();
                 event.price = order->price();
                 // Partial cancel (50-100% of remaining)
                 double cancel_ratio = 0.5 + uniform_dist_(rng_) * 0.5;
-                event.quantity.value = static_cast<uint64_t>(order->remaining_quantity().value * cancel_ratio);
+                uint64_t cancel_qty = static_cast<uint64_t>(order->remaining_quantity().value * cancel_ratio);
+                event.quantity.value = (cancel_qty > 0) ? cancel_qty : 1;
             }
         }
     }

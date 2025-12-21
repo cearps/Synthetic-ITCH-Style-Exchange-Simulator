@@ -12,6 +12,7 @@
 #include <utility>
 #include <fstream>
 #include <sstream>
+#include <filesystem>
 
 namespace exchange {
 
@@ -402,6 +403,10 @@ void ExchangeSimulator::export_price_data_to_csv(const std::string& filename) co
     }
     
     const auto& trade_events = deterministic_log->get_trade_events();
+    
+    // Ensure directory exists before writing
+    std::filesystem::path file_path(filename);
+    std::filesystem::create_directories(file_path.parent_path());
     
     std::ofstream file(filename);
     if (!file.is_open()) {
