@@ -6,6 +6,9 @@ This folder contains project documentation intended for both humans and AI codin
 
 - [Project goal](project-goal.md)
 - [Build, test, and run plan](build-test-run.md)
+- Component documentation
+  - [QR-SDP Event Producer](producer/qr-sdp-event-producer.md)
+  - [ITCH Encoder Scope](encoding/itch-encoder-scope.md)
 - Architecture decisions (ADRs)
   - [ADR index](adr/README.md)
   - [ADR template](adr/0000-adr-template.md)
