@@ -11,6 +11,7 @@ This folder contains project documentation intended for both humans and AI codin
   - [ADR template](adr/0000-adr-template.md)
   - [0001 - Record architecture decisions](adr/0001-record-architecture-decisions.md)
   - [0002 - Pipeline Architecture](adr/0002-pipeline-architecture.md)
+  - [0003 - Event Log Persistence](adr/0003-event-log-persistence.md)
 - Templates
   - [Component README template](templates/component-README.template.md)
 - AI agent guidance
