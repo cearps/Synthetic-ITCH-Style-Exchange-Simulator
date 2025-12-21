@@ -55,8 +55,9 @@ bool UDPStreamer::should_drop_packet() const {
     if (config_.packet_loss_percentage == 0) {
         return false;
     }
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
+    // Use deterministic seed for reproducible packet loss simulation
+    // TODO: Make seed configurable through StreamConfig for different simulation runs
+    static std::mt19937 gen(0u);
     std::uniform_int_distribution<> dis(1, 100);
     return static_cast<uint32_t>(dis(gen)) <= config_.packet_loss_percentage;
 }

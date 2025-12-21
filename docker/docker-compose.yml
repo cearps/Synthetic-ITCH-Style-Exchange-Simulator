@@ -28,5 +28,6 @@ services:
       - ../src:/app/src:ro
       - ../build:/app/build
     working_dir: /app
-    network_mode: host
+    ports:
+      - "9999:9999/udp"
     command: ["/app/build/itch_simulator", "--seed", "12345"]

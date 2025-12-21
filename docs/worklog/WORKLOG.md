@@ -91,12 +91,6 @@ Event log persistence architecture
 
 ---
 
-## Entries
-
-(append new entries below)
-
----
-
 ### Date
 
 2025-12-18

@@ -12,7 +12,7 @@ endif()
 
 # Compiler warnings
 if(MSVC)
-    add_compile_options(/W4 /WX-)
+    add_compile_options(/W4 /WX)
 else()
     add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 endif()
@@ -78,7 +78,7 @@ set(LIBRARY_SOURCES
 add_executable(itch_simulator ${SIMULATOR_SOURCES} ${LIBRARY_SOURCES})
 
 # Google Test setup
-option(BUILD_TESTING ON)
+option(BUILD_TESTING "Enable testing" ON)
 if(BUILD_TESTING)
     enable_testing()
     
