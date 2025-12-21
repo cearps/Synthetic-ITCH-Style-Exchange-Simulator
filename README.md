@@ -74,6 +74,37 @@ It does not represent or reproduce any specific exchange’s proprietary systems
 
 ---
 
+## Getting Started
+
+### Building and Running
+
+The project uses **CMake** for builds and **Docker** for containerized development (recommended for consistency).
+
+**Quick Start with Docker:**
+```bash
+# Build the project
+docker-compose -f docker/docker-compose.yml build
+
+# Run tests
+docker-compose -f docker/docker-compose.yml run --rm test
+
+# Run the simulator
+docker-compose -f docker/docker-compose.yml run --rm simulator
+```
+
+**Native Build (Windows):**
+```bash
+mkdir build && cd build
+cmake ..
+cmake --build . --config Release
+```
+
+For detailed build, test, and run instructions, see [Build, Test, and Run Plan](docs/build-test-run.md).
+
+---
+
 ## Documentation
 
-- `docs/README.md` (documentation index)
+- [Documentation Index](docs/README.md)
+- [Build, Test, and Run Plan](docs/build-test-run.md) - Comprehensive guide for building, testing, and running the simulator (essential for AI agents and developers)
+- [Architecture Decisions](docs/adr/README.md) - Architecture Decision Records (ADRs)
