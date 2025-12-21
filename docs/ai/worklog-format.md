@@ -6,7 +6,7 @@ This document defines where and how AI agents should record work performed on th
 
 Record work in:
 
-- `worklog/WORKLOG.md`
+- `docs/worklog/WORKLOG.md`
 
 If a change is “major” (large behavior change, new component, public interface change, architectural decision), update the worklog as part of completing the change.
 
@@ -18,6 +18,6 @@ Each entry should be appended to the end of the file and contain:
 2. An AI-generated section (what changed, why, how validated, tradeoffs)
 3. A manual additions section (left for humans to edit)
 
-Use the template in `worklog/WORKLOG.md`.
+Use the template in `docs/worklog/WORKLOG.md`.
 
 

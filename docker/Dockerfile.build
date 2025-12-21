@@ -1,0 +1,28 @@
+FROM ubuntu:22.04
+
+# Avoid interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy CMake configuration
+COPY CMakeLists.txt ./
+
+# Copy source code
+COPY src/ ./src/
+
+# Build directory
+RUN mkdir -p build && cd build && \
+    cmake .. && \
+    cmake --build . --config Release || (echo "Build failed, showing errors:" && cat CMakeFiles/CMakeError.log 2>/dev/null || true && exit 1)
+
+# Default command (can be overridden)
+CMD ["/app/build/itch_simulator"]
+

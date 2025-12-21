@@ -22,7 +22,7 @@ Implementation files (`.cpp`) will be added as development progresses. The curre
 
 ## Dependencies
 
-- C++ standard library (C++11 or later)
+- C++ standard library (C++17)
 - Platform-specific socket libraries for UDP streaming (to be implemented)
 
 ## Implementation Status

@@ -1,0 +1,33 @@
+version: "3.8"
+
+services:
+  build:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.build
+    volumes:
+      - ../src:/app/src:ro
+      - ../build:/app/build
+    working_dir: /app
+
+  test:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.test
+    volumes:
+      - ../src:/app/src:ro
+      - ../tests:/app/tests:ro
+    working_dir: /app
+    command: ["/app/build/tests", "--gtest_color=yes"]
+
+  simulator:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.build
+    volumes:
+      - ../src:/app/src:ro
+      - ../build:/app/build
+    working_dir: /app
+    ports:
+      - "9999:9999/udp"
+    command: ["/app/build/itch_simulator", "--seed", "12345"]
