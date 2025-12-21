@@ -17,5 +17,3 @@ This folder contains project documentation intended for both humans and AI codin
 - AI agent guidance
   - [General rules](ai/general-rules.md)
   - [Worklog format](ai/worklog-format.md)
-
-

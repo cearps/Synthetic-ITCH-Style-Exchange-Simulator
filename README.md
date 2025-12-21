@@ -81,6 +81,7 @@ It does not represent or reproduce any specific exchange’s proprietary systems
 The project uses **CMake** for builds and **Docker** for containerized development (recommended for consistency).
 
 **Quick Start with Docker:**
+
 ```bash
 # Build the project
 docker-compose -f docker/docker-compose.yml build
@@ -93,6 +94,7 @@ docker-compose -f docker/docker-compose.yml run --rm simulator
 ```
 
 **Native Build (Windows):**
+
 ```bash
 mkdir build && cd build
 cmake ..

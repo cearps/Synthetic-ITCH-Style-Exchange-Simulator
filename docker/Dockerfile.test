@@ -24,7 +24,8 @@ COPY tests/ ./tests/
 # Build with tests enabled
 RUN mkdir -p build && cd build && \
     cmake -DBUILD_TESTING=ON .. && \
-    cmake --build . --config Debug
+    echo "Fetching Google Test (this may take a moment)..." && \
+    cmake --build . --config Debug --verbose 2>&1 | head -100
 
 # Run tests by default
 CMD ["/app/build/tests", "--gtest_color=yes"]

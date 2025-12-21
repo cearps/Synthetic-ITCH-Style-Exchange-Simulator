@@ -12,15 +12,18 @@ void DeterministicEventLog::initialize(uint64_t seed) {
 }
 
 void DeterministicEventLog::append_event(const OrderEvent& event) {
+    (void)event;  // Unused in stub
     // TODO: Implement event logging
     sequence_counter_++;
 }
 
 void DeterministicEventLog::append_trade(const TradeEvent& trade) {
+    (void)trade;  // Unused in stub
     // TODO: Implement trade logging
 }
 
 void DeterministicEventLog::append_book_update(const BookUpdateEvent& update) {
+    (void)update;  // Unused in stub
     // TODO: Implement book update logging
 }
 

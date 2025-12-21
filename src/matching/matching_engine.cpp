@@ -7,6 +7,7 @@ PriceTimeMatchingEngine::PriceTimeMatchingEngine()
 }
 
 void PriceTimeMatchingEngine::process_order_event(const OrderEvent& event) {
+    (void)event;  // Unused in stub
     // TODO: Implement matching logic
 }
 
@@ -28,10 +29,14 @@ void PriceTimeMatchingEngine::set_book_update_callback(std::function<void(const 
 }
 
 void PriceTimeMatchingEngine::match_limit_order(const OrderEvent& event, std::shared_ptr<IOrderBook> book) {
+    (void)event;  // Unused in stub
+    (void)book;   // Unused in stub
     // TODO: Implement limit order matching
 }
 
 void PriceTimeMatchingEngine::match_market_order(const OrderEvent& event, std::shared_ptr<IOrderBook> book) {
+    (void)event;  // Unused in stub
+    (void)book;   // Unused in stub
     // TODO: Implement market order matching
 }
 

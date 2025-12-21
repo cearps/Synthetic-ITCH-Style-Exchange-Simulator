@@ -21,7 +21,7 @@ COPY src/ ./src/
 # Build directory
 RUN mkdir -p build && cd build && \
     cmake .. && \
-    cmake --build . --config Release
+    cmake --build . --config Release || (echo "Build failed, showing errors:" && cat CMakeFiles/CMakeError.log 2>/dev/null || true && exit 1)
 
 # Default command (can be overridden)
 CMD ["/app/build/itch_simulator"]

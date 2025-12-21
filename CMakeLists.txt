@@ -63,8 +63,19 @@ set(ALL_SOURCES
     ${SIMULATOR_SOURCES}
 )
 
+# Main executable (exclude main.cpp from ALL_SOURCES since it's in SIMULATOR_SOURCES)
+set(LIBRARY_SOURCES
+    ${CORE_SOURCES}
+    ${PRODUCER_SOURCES}
+    ${MATCHING_SOURCES}
+    ${LOGGING_SOURCES}
+    ${ENCODING_SOURCES}
+    ${STREAMING_SOURCES}
+    src/exchange_simulator.cpp
+)
+
 # Main executable
-add_executable(itch_simulator ${SIMULATOR_SOURCES} ${ALL_SOURCES})
+add_executable(itch_simulator ${SIMULATOR_SOURCES} ${LIBRARY_SOURCES})
 
 # Google Test setup
 option(BUILD_TESTING ON)
@@ -88,11 +99,10 @@ if(BUILD_TESTING)
     )
     
     if(TEST_SOURCES)
-        add_executable(tests ${TEST_SOURCES} ${ALL_SOURCES})
+        add_executable(tests ${TEST_SOURCES} ${LIBRARY_SOURCES})
         target_link_libraries(tests 
             PRIVATE 
             gtest_main
-            gmock_main
         )
         include(GoogleTest)
         gtest_discover_tests(tests)

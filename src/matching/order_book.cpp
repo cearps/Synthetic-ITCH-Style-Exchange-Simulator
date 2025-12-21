@@ -6,10 +6,12 @@ LimitOrderBook::LimitOrderBook(Symbol symbol) : symbol_(symbol) {
 }
 
 void LimitOrderBook::add_order(OrderPtr order) {
+    (void)order;  // Unused in stub
     // TODO: Implement order book add logic
 }
 
 void LimitOrderBook::cancel_order(OrderId order_id) {
+    (void)order_id;  // Unused in stub
     // TODO: Implement cancellation logic
 }
 

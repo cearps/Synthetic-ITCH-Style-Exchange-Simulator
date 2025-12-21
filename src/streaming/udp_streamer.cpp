@@ -21,6 +21,7 @@ bool UDPStreamer::initialize() {
 }
 
 void UDPStreamer::stream_message(const std::vector<uint8_t>& message) {
+    (void)message;  // Unused in stub
     if (!is_connected() || should_drop_packet()) {
         return;
     }
@@ -57,7 +58,7 @@ bool UDPStreamer::should_drop_packet() const {
     static std::random_device rd;
     static std::mt19937 gen(rd());
     std::uniform_int_distribution<> dis(1, 100);
-    return dis(gen) <= config_.packet_loss_percentage;
+    return static_cast<uint32_t>(dis(gen)) <= config_.packet_loss_percentage;
 }
 
 void UDPStreamer::apply_latency_simulation() const {

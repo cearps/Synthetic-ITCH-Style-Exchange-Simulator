@@ -4,6 +4,8 @@
 
 int main(int argc, char* argv[]) {
     // TODO: Parse command-line arguments
+    (void)argc;  // Unused for now
+    (void)argv;  // Unused for now
     // For now, create a simple configuration
     
     exchange::SimulatorConfig config;
