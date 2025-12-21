@@ -95,6 +95,11 @@ if(BUILD_TESTING)
     set(TEST_SOURCES
         tests/core/test_events.cpp
         tests/core/test_order.cpp
+        tests/producer/test_event_producer.cpp
+        tests/matching/test_order_book.cpp
+        tests/matching/test_matching_engine.cpp
+        tests/logging/test_event_log.cpp
+        tests/encoding/test_itch_encoder.cpp
         # Add more test files here as they are created
     )
     
