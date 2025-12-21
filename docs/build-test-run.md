@@ -230,7 +230,7 @@ build:
 
 4. **Documentation**:
    - Update relevant docs if public interface changes
-   - Add to worklog if major change
+   - Add to worklog if major change (see `docs/worklog/WORKLOG.md`)
 
 ### When Modifying Existing Code
 
