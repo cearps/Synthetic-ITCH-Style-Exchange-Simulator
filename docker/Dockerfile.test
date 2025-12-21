@@ -1,32 +1,22 @@
 FROM ubuntu:22.04
 
-# Avoid interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install build dependencies including testing tools
-# Note: valgrind is optional and can be added later if needed
 RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
     git \
-    gdb \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy CMake configuration
 COPY CMakeLists.txt ./
-
-# Copy source code
 COPY src/ ./src/
 COPY tests/ ./tests/
 
-# Build with tests enabled
 RUN mkdir -p build && cd build && \
     cmake -DBUILD_TESTING=ON .. && \
-    echo "Fetching Google Test (this may take a moment)..." && \
-    cmake --build . --config Debug --verbose 2>&1 | head -100
+    cmake --build . --target tests --config Debug
 
-# Run tests by default
 CMD ["/app/build/tests", "--gtest_color=yes"]
 

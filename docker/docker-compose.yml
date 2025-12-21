@@ -17,7 +17,6 @@ services:
     volumes:
       - ../src:/app/src:ro
       - ../tests:/app/tests:ro
-      - ../build:/app/build
     working_dir: /app
     command: ["/app/build/tests", "--gtest_color=yes"]
 
