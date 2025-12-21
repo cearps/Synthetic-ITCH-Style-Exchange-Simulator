@@ -63,6 +63,34 @@ Build, test, and run plan
 
 ---
 
+### Date
+
+2025-12-21
+
+### Author
+
+AI Assistant
+
+### Scope
+
+Event log persistence architecture
+
+### AI-generated work log
+
+**What changed**: Created ADR 0003 documenting event log persistence architecture. Designed hybrid approach extending IEventLog interface with persistence methods while using pluggable IEventLogStorage abstraction layer. Decided on binary file format for initial implementation with support for future storage backends (database, remote storage).
+
+**Why**: Event log needs persistence for backtesting, offline replay, verification, and long-running simulations. Current in-memory implementation is insufficient. Design maintains interface-based architecture while enabling flexible storage backends.
+
+**How validated**: Architecture reviewed for consistency with existing interface-based design. Ensures determinism (same seed = same events) through binary format with deterministic encoding. Design allows swapping storage backends without breaking existing code.
+
+**Tradeoffs / risks**: Additional abstraction layer adds complexity but provides flexibility. Binary format requires versioning strategy for future migrations. File I/O operations need robust error handling. Incremental saves must be atomic to avoid corruption.
+
+### Manual additions
+
+(Human edits, notes, links, context)
+
+---
+
 ## Entries
 
 (append new entries below)

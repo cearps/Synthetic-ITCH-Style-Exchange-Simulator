@@ -20,5 +20,6 @@ Create an ADR when you make a decision that is:
 
 - [0001 - Record architecture decisions](0001-record-architecture-decisions.md)
 - [0002 - Pipeline Architecture](0002-pipeline-architecture.md)
+- [0003 - Event Log Persistence](0003-event-log-persistence.md)
 
 
