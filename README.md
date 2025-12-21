@@ -84,9 +84,10 @@ The project uses **CMake** for builds and **Docker** for containerized developme
 
 ```bash
 # Build the project
-docker-compose -f docker/docker-compose.yml build
+docker-compose -f docker/docker-compose.yml build build
 
-# Run tests
+# Build and run tests (first build downloads Google Test - may take a few minutes)
+docker-compose -f docker/docker-compose.yml build test
 docker-compose -f docker/docker-compose.yml run --rm test
 
 # Run the simulator
