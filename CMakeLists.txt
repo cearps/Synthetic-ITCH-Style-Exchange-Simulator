@@ -75,7 +75,16 @@ set(LIBRARY_SOURCES
 )
 
 # Main executable
-add_executable(itch_simulator ${SIMULATOR_SOURCES} ${LIBRARY_SOURCES})
+add_executable(itch_simulator 
+    src/main.cpp
+    src/exchange_simulator.cpp
+    ${CORE_SOURCES}
+    ${PRODUCER_SOURCES}
+    ${MATCHING_SOURCES}
+    ${LOGGING_SOURCES}
+    ${ENCODING_SOURCES}
+    ${STREAMING_SOURCES}
+)
 
 # Google Test setup
 option(BUILD_TESTING "Enable testing" ON)
@@ -101,6 +110,7 @@ if(BUILD_TESTING)
         tests/logging/test_event_log.cpp
         tests/encoding/test_itch_encoder.cpp
         tests/streaming/test_udp_streamer.cpp
+        tests/integration/test_determinism.cpp
         # Add more test files here as they are created
     )
     

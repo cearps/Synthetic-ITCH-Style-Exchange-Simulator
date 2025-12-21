@@ -49,6 +49,11 @@ public:
     
     std::vector<OrderEvent> replay_events() const override;
     
+    // Accessors for visualization
+    const std::vector<OrderEvent>& get_order_events() const { return order_events_; }
+    const std::vector<TradeEvent>& get_trade_events() const { return trade_events_; }
+    const std::vector<BookUpdateEvent>& get_book_update_events() const { return book_update_events_; }
+    
 private:
     uint64_t seed_;
     uint64_t sequence_counter_;

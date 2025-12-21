@@ -5,6 +5,7 @@
 #include <vector>
 #include <memory>
 #include <map>
+#include <deque>
 #include <utility>
 
 namespace exchange {
@@ -27,6 +28,10 @@ public:
     
     virtual std::vector<std::pair<Price, Quantity>> bid_levels() const = 0;
     virtual std::vector<std::pair<Price, Quantity>> ask_levels() const = 0;
+    
+    // Price-time priority methods
+    virtual OrderPtr get_first_bid_order_at_price(Price price) const = 0;
+    virtual OrderPtr get_first_ask_order_at_price(Price price) const = 0;
     
     virtual void clear() = 0;
 };
@@ -51,6 +56,11 @@ public:
     std::vector<std::pair<Price, Quantity>> bid_levels() const override;
     std::vector<std::pair<Price, Quantity>> ask_levels() const override;
     
+    OrderPtr get_first_bid_order_at_price(Price price) const override;
+    OrderPtr get_first_ask_order_at_price(Price price) const override;
+    
+    void update_price_level_quantity(Price price, OrderSide side);
+    
     void clear() override;
     
     Symbol symbol() const;
@@ -60,6 +70,10 @@ private:
     std::map<OrderId, OrderPtr> orders_by_id_;
     std::map<Price, Quantity> bid_levels_;
     std::map<Price, Quantity> ask_levels_;
+    
+    // Time-ordered queues for price-time priority matching
+    std::map<Price, std::deque<OrderPtr>> bid_queues_;
+    std::map<Price, std::deque<OrderPtr>> ask_queues_;
 };
 
 } // namespace exchange
