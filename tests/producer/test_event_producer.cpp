@@ -29,14 +29,17 @@ TEST_F(QRSDPEventProducerTest, InitializationWithSeed) {
 }
 
 TEST_F(QRSDPEventProducerTest, DeterministicBehaviorWithSameSeed) {
+    // Test that same seed produces identical event sequence when book state is identical
+    // This is a core requirement for replayability
+    
     const uint64_t seed = 54321;
     
     // First run
     producer_->initialize(seed);
     std::vector<OrderEvent> events1;
     
-    // Generate some events (if producer can generate without book state)
-    // This test structure assumes producer needs book state - will need adjustment
+    // TODO: Once producer implementation is added, generate events with same book state
+    // and verify events1 == events2 after second run with same seed
     
     // Second run with same seed
     producer_->reset();
@@ -44,7 +47,7 @@ TEST_F(QRSDPEventProducerTest, DeterministicBehaviorWithSameSeed) {
     std::vector<OrderEvent> events2;
     
     // Events should be identical (when book state is same)
-    // This is a placeholder - actual test depends on producer implementation
+    // This will be implemented once producer can generate events
 }
 
 TEST_F(QRSDPEventProducerTest, ResetFunctionality) {
@@ -59,7 +62,7 @@ TEST_F(QRSDPEventProducerTest, ResetFunctionality) {
 
 TEST_F(QRSDPEventProducerTest, StateDependentIntensityCalculation) {
     // Test that producer reads book state and adjusts intensities
-    // This requires book to have some state
+    // Different book states should produce different event rates/types
     
     producer_->initialize(42);
     
@@ -76,18 +79,22 @@ TEST_F(QRSDPEventProducerTest, StateDependentIntensityCalculation) {
     );
     order_book_->add_order(order2);
     
-    // Producer should be able to generate events based on this state
-    // Actual test depends on producer implementation details
+    // TODO: Once producer implementation is added, verify that:
+    // 1. Producer can read book state (spread, imbalance, queue sizes)
+    // 2. Different states produce different event generation patterns
+    // 3. Intensity functions respond to state changes
 }
 
 TEST_F(QRSDPEventProducerTest, CompetingPoissonClocks) {
     // Test that different event types can be generated
-    // with probabilities based on intensities
+    // with probabilities based on intensities (competing Poisson clocks)
     
     producer_->initialize(100);
     
-    // With book state, producer should generate different event types
-    // This test verifies the competing clocks mechanism works
+    // TODO: Once producer implementation is added, verify that:
+    // 1. Multiple event types are generated (AddLimitBid, AddLimitAsk, CancelBid, CancelAsk, AggressiveBuy, AggressiveSell)
+    // 2. Event type selection follows probability distribution based on intensities
+    // 3. Total event rate equals sum of individual intensities
 }
 
 TEST_F(QRSDPEventProducerTest, EventParameterGeneration) {
@@ -99,8 +106,12 @@ TEST_F(QRSDPEventProducerTest, EventParameterGeneration) {
     
     producer_->initialize(200);
     
-    // Generate events and verify parameters
-    // This is a placeholder for actual parameter validation
+    // TODO: Once producer implementation is added, generate events and verify:
+    // 1. Order IDs are unique and deterministic
+    // 2. Prices follow depth distribution (~80% at best, ~15% at ±1 tick, ~5% deeper)
+    // 3. Quantities are positive and follow size distribution
+    // 4. Sides are valid (BUY or SELL)
+    // 5. Symbols match the book symbol
 }
 
 TEST_F(QRSDPEventProducerTest, SpreadBucketCalculation) {
@@ -111,8 +122,11 @@ TEST_F(QRSDPEventProducerTest, SpreadBucketCalculation) {
     
     producer_->initialize(300);
     
-    // Create different spread scenarios and verify bucketing
-    // This requires access to internal state or observable behavior
+    // TODO: Once producer implementation is added, create different spread scenarios:
+    // 1. Spread = 1 tick -> should bucket as S1
+    // 2. Spread = 2 ticks -> should bucket as S2
+    // 3. Spread >= 3 ticks -> should bucket as S3
+    // Verify that different buckets produce different intensity values
 }
 
 TEST_F(QRSDPEventProducerTest, ImbalanceBucketCalculation) {
@@ -125,8 +139,13 @@ TEST_F(QRSDPEventProducerTest, ImbalanceBucketCalculation) {
     
     producer_->initialize(400);
     
-    // Create different imbalance scenarios
-    // This requires book state manipulation
+    // TODO: Once producer implementation is added, create different imbalance scenarios:
+    // 1. Strongly ask-heavy (e.g., bid_qty=10, ask_qty=100) -> I--
+    // 2. Mildly ask-heavy -> I-
+    // 3. Balanced -> I0
+    // 4. Mildly bid-heavy -> I+
+    // 5. Strongly bid-heavy -> I++
+    // Verify that different buckets produce different intensity values
 }
 
 TEST_F(QRSDPEventProducerTest, QueueSizeBucketCalculation) {
@@ -137,7 +156,11 @@ TEST_F(QRSDPEventProducerTest, QueueSizeBucketCalculation) {
     
     producer_->initialize(500);
     
-    // Create different queue size scenarios
+    // TODO: Once producer implementation is added, create different queue size scenarios:
+    // 1. Small queue (qty < 100) -> Qsmall
+    // 2. Medium queue (100 ≤ qty < 1000) -> Qmed
+    // 3. Large queue (qty ≥ 1000) -> Qlarge
+    // Verify that different buckets produce different intensity values
 }
 
 TEST_F(QRSDPEventProducerTest, DeterministicOrderIdGeneration) {
@@ -147,17 +170,23 @@ TEST_F(QRSDPEventProducerTest, DeterministicOrderIdGeneration) {
     const uint64_t seed = 600;
     producer_->initialize(seed);
     
-    // Generate events and verify order IDs are deterministic
+    // TODO: Once producer implementation is added, verify that:
+    // 1. Order IDs are generated sequentially (monotonic counter)
+    // 2. Same seed produces same order ID sequence
+    // 3. Order IDs are unique within a simulation run
 }
 
 TEST_F(QRSDPEventProducerTest, SimulatedTimeAdvancement) {
     // Test that producer advances simulated time based on
-    // exponential distribution sampling
+    // exponential distribution sampling (Poisson process)
     
     producer_->initialize(700);
     
-    // Verify that timestamps in generated events advance
-    // according to Poisson process
+    // TODO: Once producer implementation is added, verify that:
+    // 1. Timestamps in generated events advance monotonically
+    // 2. Time between events follows exponential distribution
+    // 3. Time advancement is deterministic (same seed = same time sequence)
+    // 4. Time is driven by sampled Δt, not wall clock
 }
 
 } // namespace test

@@ -247,8 +247,6 @@ TEST_F(UDPStreamerTest, MultipleInitialization) {
     streamer_->shutdown();
     
     (void)streamer_->initialize(); // Should be able to reinitialize after shutdown
-    
-    // Should be able to reinitialize after shutdown
     // Results may vary based on network state
 }
 
