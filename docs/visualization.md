@@ -148,12 +148,54 @@ docker run --rm -v "${PWD}/data:/app/data" docker-simulator /app/build/itch_simu
 # The CSV file will be at: data/price_data_seed_99999.csv
 ```
 
+## Python Visualization Tool
+
+A Python script is provided to create comprehensive visualizations of the price data:
+
+### Setup
+
+Install required Python packages:
+
+```bash
+pip install -r tools/requirements.txt
+```
+
+### Usage
+
+```bash
+# Use the most recent CSV file in data/
+python tools/visualize_price_data.py
+
+# Or specify a specific CSV file
+python tools/visualize_price_data.py data/price_data_seed_99999.csv
+```
+
+### Output
+
+The script generates two visualization files in the `data/` directory:
+
+1. **`price_visualization.png`**: Comprehensive dashboard with 6 charts:
+   - Price over time (main chart)
+   - Price distribution histogram
+   - Trading volume over time
+   - Price change distribution
+   - Volume-weighted average price (VWAP)
+   - Summary statistics
+
+2. **`price_simple.png`**: Simple price chart with filled area
+
+The script also prints detailed summary statistics to the console, including:
+- Total trades and time range
+- Price statistics (min, max, average, range, std dev)
+- Volume statistics
+- Price change statistics
+
 ## Future Enhancements
 
 Potential future visualization improvements:
 
 - JSON export for structured data analysis
-- Graphical visualization (price charts, order book depth)
-- Statistical analysis (spread distribution, volume profile)
 - Interactive web-based viewer
+- Order book depth visualization
+- Statistical analysis (spread distribution, volume profile)
 - Export to database for querying

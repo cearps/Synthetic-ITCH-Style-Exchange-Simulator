@@ -8,7 +8,9 @@ namespace exchange {
 QRSDPEventProducer::QRSDPEventProducer()
     : seed_(0), order_id_counter_(1), sequence_counter_(0), current_time_ns_(0), 
       max_time_ns_(UINT64_MAX), tick_size_(1), has_pending_event_(false),
-      uniform_dist_(0.0, 1.0), exp_dist_(1.0) {
+      uniform_dist_(0.0, 1.0), exp_dist_(1.0), normal_dist_(0.0, 1.0),
+      reference_price_(10050.0), price_drift_(0.0), price_volatility_(0.2),
+      last_price_update_ns_(0), current_volatility_(0.2) {
 }
 
 void QRSDPEventProducer::initialize(uint64_t seed) {
@@ -18,6 +20,24 @@ void QRSDPEventProducer::initialize(uint64_t seed) {
     current_time_ns_ = 0;
     has_pending_event_ = false;
     rng_.seed(static_cast<unsigned int>(seed));
+    
+    // Initialize reference price dynamics
+    // Start at a reasonable mid-price (10050 = midpoint of typical 10000-10100 range)
+    reference_price_ = 10050.0;
+    
+    // Annualized parameters (convert to per-nanosecond)
+    // Drift: Small random drift component (can be positive or negative)
+    // This creates trends in the price movement
+    double annual_drift = (uniform_dist_(rng_) - 0.5) * 0.1;  // -5% to +5% annual drift
+    price_drift_ = annual_drift / (365.25 * 24 * 3600 * 1e9);
+    
+    // Volatility: 30% annualized (higher for more realistic movement)
+    // Convert to per-nanosecond: sigma / sqrt(nanoseconds_per_year)
+    double nanoseconds_per_year = 365.25 * 24 * 3600 * 1e9;
+    price_volatility_ = 0.3 / std::sqrt(nanoseconds_per_year);
+    current_volatility_ = price_volatility_;
+    
+    last_price_update_ns_ = 0;
 }
 
 bool QRSDPEventProducer::has_next_event() const {
@@ -44,6 +64,9 @@ OrderEvent QRSDPEventProducer::next_event() {
         OrderEvent empty{};
         return empty;
     }
+    
+    // Update reference price (geometric Brownian motion with mean reversion)
+    update_reference_price();
     
     // Read current book state
     BookState state = read_book_state();
@@ -318,41 +341,134 @@ OrderEvent QRSDPEventProducer::generate_aggressive_sell(const BookState& /* stat
     return event;
 }
 
+void QRSDPEventProducer::update_reference_price() {
+    if (current_time_ns_ == last_price_update_ns_) {
+        return;  // No time has passed
+    }
+    
+    uint64_t delta_ns = current_time_ns_ - last_price_update_ns_;
+    last_price_update_ns_ = current_time_ns_;
+    
+    // Geometric Brownian Motion with mean reversion
+    // dS = S * (mu * dt + sigma * dW) - theta * (S - S0) * dt
+    // where:
+    //   mu = drift
+    //   sigma = volatility
+    //   theta = mean reversion speed
+    //   S0 = long-term mean (initial reference price)
+    
+    double dt = static_cast<double>(delta_ns) / (365.25 * 24 * 3600 * 1e9);  // Convert to years
+    double theta = 0.05;  // Weak mean reversion (half-life ~ 14 years) - allows trends to persist
+    double S0 = 10050.0;  // Long-term mean price
+    
+    // Random shock (Wiener process)
+    double dW = normal_dist_(rng_) * std::sqrt(dt);
+    
+    // Update volatility with clustering (GARCH-like)
+    // Volatility tends to persist: high vol -> high vol, low vol -> low vol
+    double vol_shock = std::abs(normal_dist_(rng_)) * 0.15;
+    current_volatility_ = 0.90 * current_volatility_ + 0.10 * price_volatility_ + vol_shock * price_volatility_;
+    current_volatility_ = std::max(0.1, std::min(0.6, current_volatility_));  // Clamp to reasonable range
+    
+    // Scale volatility for simulation time (make movements more visible in short simulations)
+    // For short simulations, we want more noticeable price movements
+    double scaled_vol = current_volatility_ * 100.0;  // Amplify for visibility
+    
+    // Geometric Brownian Motion component
+    double drift_term = price_drift_ * dt;
+    double diffusion_term = scaled_vol * dW;
+    
+    // Weak mean reversion component (allows trends to develop)
+    double mean_reversion_term = -theta * (reference_price_ - S0) * dt;
+    
+    // Update reference price (log-normal to ensure positive prices)
+    double log_price = std::log(reference_price_);
+    log_price += drift_term + diffusion_term + mean_reversion_term / reference_price_;
+    reference_price_ = std::exp(log_price);
+    
+    // Clamp to reasonable range (prevent extreme values)
+    reference_price_ = std::max(5000.0, std::min(20000.0, reference_price_));
+}
+
 Price QRSDPEventProducer::sample_price_for_add(OrderSide side, const BookState& state) {
     double rand = uniform_dist_(rng_);
     Price price{0};
     
+    // Use reference price as the center of the distribution
+    int64_t ref_price_ticks = static_cast<int64_t>(reference_price_);
+    
     if (side == OrderSide::BUY) {
         if (!order_book_->has_bid()) {
-            // No bid, start at a reasonable price
-            price = Price{10000};
+            // No bid, place order below reference price
+            int64_t offset_ticks = static_cast<int64_t>(normal_dist_(rng_) * 5.0);  // ~5 tick spread
+            price = Price{ref_price_ticks - std::abs(offset_ticks) * tick_size_};
         } else {
-            if (rand < 0.8) {
-                // 80% at best bid
+            // Use reference price with realistic distribution
+            if (rand < 0.3) {
+                // 30% at best bid (liquidity provision)
                 price = state.best_bid;
-            } else if (rand < 0.95) {
-                // 15% at best bid - 1 tick
-                price = Price{state.best_bid.value - tick_size_};
+            } else if (rand < 0.6) {
+                // 30% near reference price (within 3 ticks) - more spread around reference
+                int64_t offset = static_cast<int64_t>(normal_dist_(rng_) * 3.0);
+                int64_t target = ref_price_ticks + offset * tick_size_;
+                // Ensure it's below best ask if exists
+                if (order_book_->has_ask() && target >= state.best_ask.value) {
+                    target = state.best_ask.value - tick_size_;
+                }
+                price = Price{target};
+            } else if (rand < 0.85) {
+                // 25% slightly below reference (1-5 ticks) - wider range
+                int64_t offset = 1 + static_cast<int64_t>(uniform_dist_(rng_) * 4);
+                price = Price{ref_price_ticks - offset * tick_size_};
             } else {
-                // 5% deeper (geometric decay)
-                int64_t offset = static_cast<int64_t>(-tick_size_ * (2 + std::floor(-std::log(uniform_dist_(rng_)))));
-                price = Price{state.best_bid.value + offset};
+                // 15% deeper (aggressive limit orders) - more aggressive orders
+                int64_t offset = static_cast<int64_t>(std::abs(normal_dist_(rng_)) * 8.0 + 5);
+                price = Price{ref_price_ticks - offset * tick_size_};
+            }
+            
+            // Ensure price doesn't exceed best ask
+            if (order_book_->has_ask() && price.value >= state.best_ask.value) {
+                price = Price{state.best_ask.value - tick_size_};
             }
         }
     } else {  // SELL
         if (!order_book_->has_ask()) {
-            price = Price{10100};
+            // No ask, place order above reference price
+            int64_t offset_ticks = static_cast<int64_t>(normal_dist_(rng_) * 5.0);
+            price = Price{ref_price_ticks + std::abs(offset_ticks) * tick_size_};
         } else {
-            if (rand < 0.8) {
+            if (rand < 0.3) {
+                // 30% at best ask
                 price = state.best_ask;
-            } else if (rand < 0.95) {
-                price = Price{state.best_ask.value + tick_size_};
+            } else if (rand < 0.6) {
+                // 30% near reference price (within 3 ticks) - more spread around reference
+                int64_t offset = static_cast<int64_t>(normal_dist_(rng_) * 3.0);
+                int64_t target = ref_price_ticks + offset * tick_size_;
+                // Ensure it's above best bid if exists
+                if (order_book_->has_bid() && target <= state.best_bid.value) {
+                    target = state.best_bid.value + tick_size_;
+                }
+                price = Price{target};
+            } else if (rand < 0.85) {
+                // 25% slightly above reference (1-5 ticks) - wider range
+                int64_t offset = 1 + static_cast<int64_t>(uniform_dist_(rng_) * 4);
+                price = Price{ref_price_ticks + offset * tick_size_};
             } else {
-                int64_t offset = static_cast<int64_t>(tick_size_ * (2 + std::floor(-std::log(uniform_dist_(rng_)))));
-                price = Price{state.best_ask.value + offset};
+                // 15% deeper (aggressive limit orders) - more aggressive orders
+                int64_t offset = static_cast<int64_t>(std::abs(normal_dist_(rng_)) * 8.0 + 5);
+                price = Price{ref_price_ticks + offset * tick_size_};
+            }
+            
+            // Ensure price doesn't go below best bid
+            if (order_book_->has_bid() && price.value <= state.best_bid.value) {
+                price = Price{state.best_bid.value + tick_size_};
             }
         }
     }
+    
+    // Ensure price is positive and reasonable
+    if (price.value < 1000) price = Price{1000};
+    if (price.value > 50000) price = Price{50000};
     
     return price;
 }

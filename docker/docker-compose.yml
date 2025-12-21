@@ -31,4 +31,4 @@ services:
     working_dir: /app
     ports:
       - "9999:9999/udp"
-    command: ["/app/build/itch_simulator", "--seed", "12345"]
+    command: ["/app/build/itch_simulator", "12345"]

@@ -48,6 +48,14 @@ private:
     std::mt19937 rng_;
     std::uniform_real_distribution<double> uniform_dist_;
     std::exponential_distribution<double> exp_dist_;
+    std::normal_distribution<double> normal_dist_;
+    
+    // Reference price dynamics (for realistic price evolution)
+    double reference_price_;  // Current reference/fair value price
+    double price_drift_;      // Annualized drift (per nanosecond)
+    double price_volatility_; // Annualized volatility (per nanosecond)
+    uint64_t last_price_update_ns_;  // Last time reference price was updated
+    double current_volatility_;  // Current volatility (for clustering)
     
     // State bucketing
     enum class SpreadBucket { S1, S2, S3 };
@@ -89,6 +97,10 @@ private:
     Price sample_price_for_add(OrderSide side, const BookState& state);
     Quantity sample_quantity();
     OrderId next_order_id();
+    
+    // Reference price dynamics
+    void update_reference_price();
+    double get_reference_price() const { return reference_price_; }
 };
 
 } // namespace exchange
