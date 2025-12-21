@@ -16,7 +16,7 @@ The project uses:
 
 #### Windows Native Build
 - CMake 3.15 or later
-- C++ compiler with C++11 support (MSVC 2015+, MinGW, or Clang)
+- C++ compiler with C++17 support (MSVC 2017+, GCC 7+, or Clang 5+)
 - Git
 
 #### Docker Build (Recommended for Consistency)
