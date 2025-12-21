@@ -38,6 +38,13 @@ public:
     const SimulatorConfig& get_config() const;
     bool is_running() const;
     
+    // Visualization
+    void print_event_log_summary() const;
+    void export_price_data_to_csv(const std::string& filename) const;
+    
+    // Accessor for testing
+    IEventLog* get_event_log() { return event_log_.get(); }
+    
 private:
     SimulatorConfig config_;
     bool running_;

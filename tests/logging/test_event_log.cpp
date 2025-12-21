@@ -220,7 +220,7 @@ TEST_F(DeterministicEventLogTest, DeterministicReplay) {
     
     auto replay1 = log_->replay_events();
     
-    log_->reset();
+    log_->clear();  // Clear events explicitly
     log_->initialize(seed);
     log_->append_event(event);
     auto replay2 = log_->replay_events();

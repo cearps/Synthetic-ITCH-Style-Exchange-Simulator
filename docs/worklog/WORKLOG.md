@@ -37,6 +37,77 @@ YYYY-MM-DD
 
 ### Date
 
+2025-01-27
+
+### Author
+
+AI Assistant
+
+### Scope
+
+Issue #21: Full simulation pipeline implementation and visualization
+
+### AI-generated work log
+
+**What changed**: Implemented the complete simulation pipeline from event production through matching engine to deterministic event logging, including visualization tools. Key components:
+
+1. **Event Producer (QR-SDP)**: Implemented Queue-Reactive, State-Dependent Poisson event producer with realistic price dynamics:
+   - Reference price tracking with geometric Brownian motion and mean reversion
+   - Volatility clustering (GARCH-like behavior)
+   - State-dependent intensity calculation based on book state (spread, imbalance, queue sizes)
+   - Deterministic order generation with seed-based RNG
+
+2. **Matching Engine**: Implemented price-time priority matching engine:
+   - Continuous double auction matching
+   - Price-time priority order book with bid/ask queues
+   - Trade generation and book update callbacks
+   - Deterministic event processing
+
+3. **Event Log**: Enhanced deterministic event log with:
+   - Append-only event storage (order events, trade events, book updates)
+   - Sequence number assignment for deterministic ordering
+   - Accessor methods for visualization
+
+4. **Exchange Simulator**: Integrated all components:
+   - Component initialization and wiring
+   - Event processing loop
+   - Console-based event log summary visualization
+   - CSV export for price data
+
+5. **Visualization Tools**:
+   - Console summary with statistics and ASCII price charts
+   - CSV export functionality (timestamp, price, quantity, order IDs)
+   - Python visualization script with comprehensive charts (price over time, distributions, volume, VWAP)
+   - Virtual environment setup scripts for Python tools
+
+**Why**: Issue #21 required implementing the full simulation pipeline up to and including the deterministic event log, then providing visualization tools to assess simulation progress and sanity. The price dynamics needed to be realistic (not just oscillating around a starting position) to match real stock behavior.
+
+**How validated**: 
+- Integration test for determinism (same seed produces identical event logs)
+- Manual verification of price behavior (trends, volatility, realistic movement)
+- CSV export verified with Python visualization tools
+- All components tested in isolation and integrated
+
+**Tradeoffs / risks**:
+- Price dynamics model uses simplified parameters (drift, volatility, mean reversion) - may need calibration for different market regimes
+- Reference price updates happen on every event - could be optimized for performance if needed
+- CSV export writes to disk synchronously - could be made async for high-frequency simulations
+- Python visualization requires external dependencies (pandas, matplotlib) - provided venv setup to isolate
+
+**Follow-ups**:
+- Calibrate price dynamics parameters for different market conditions
+- Add more sophisticated visualization (order book depth, spread analysis)
+- Consider performance optimizations for high-frequency simulations
+- Add configuration options for price dynamics (drift, volatility, mean reversion strength)
+
+### Manual additions
+
+(Human edits, notes, links, context)
+
+---
+
+### Date
+
 2025-12-21
 
 ### Author
@@ -56,6 +127,77 @@ v0 test suite (TDD)
 **How validated**: All tests compile successfully with CMake and Google Test. Tests are structured to fail initially (TDD approach) and will pass once implementation is added in issue #12. Test structure mirrors source directory structure. Tests cover both happy paths and edge cases (max values, zero quantities, empty messages, etc.).
 
 **Tradeoffs / risks**: Some tests are placeholders that will need refinement once implementation details are known (e.g., producer tests that require book state access). Tests assume certain implementation details that may need adjustment. UDP streamer tests currently pass with stub implementation but will validate real functionality once implemented. Test coverage is comprehensive but may need expansion based on implementation complexity.
+
+### Manual additions
+
+(Human edits, notes, links, context)
+
+---
+
+### Date
+
+2025-01-27
+
+### Author
+
+AI Assistant
+
+### Scope
+
+Issue #21: Full simulation pipeline implementation and visualization
+
+### AI-generated work log
+
+**What changed**: Implemented the complete simulation pipeline from event production through matching engine to deterministic event logging, including visualization tools. Key components:
+
+1. **Event Producer (QR-SDP)**: Implemented Queue-Reactive, State-Dependent Poisson event producer with realistic price dynamics:
+   - Reference price tracking with geometric Brownian motion and mean reversion
+   - Volatility clustering (GARCH-like behavior)
+   - State-dependent intensity calculation based on book state (spread, imbalance, queue sizes)
+   - Deterministic order generation with seed-based RNG
+
+2. **Matching Engine**: Implemented price-time priority matching engine:
+   - Continuous double auction matching
+   - Price-time priority order book with bid/ask queues
+   - Trade generation and book update callbacks
+   - Deterministic event processing
+
+3. **Event Log**: Enhanced deterministic event log with:
+   - Append-only event storage (order events, trade events, book updates)
+   - Sequence number assignment for deterministic ordering
+   - Accessor methods for visualization
+
+4. **Exchange Simulator**: Integrated all components:
+   - Component initialization and wiring
+   - Event processing loop
+   - Console-based event log summary visualization
+   - CSV export for price data
+
+5. **Visualization Tools**:
+   - Console summary with statistics and ASCII price charts
+   - CSV export functionality (timestamp, price, quantity, order IDs)
+   - Python visualization script with comprehensive charts (price over time, distributions, volume, VWAP)
+   - Virtual environment setup scripts for Python tools
+
+**Why**: Issue #21 required implementing the full simulation pipeline up to and including the deterministic event log, then providing visualization tools to assess simulation progress and sanity. The price dynamics needed to be realistic (not just oscillating around a starting position) to match real stock behavior.
+
+**How validated**: 
+- Integration test for determinism (same seed produces identical event logs)
+- Manual verification of price behavior (trends, volatility, realistic movement)
+- CSV export verified with Python visualization tools
+- All components tested in isolation and integrated
+
+**Tradeoffs / risks**:
+- Price dynamics model uses simplified parameters (drift, volatility, mean reversion) - may need calibration for different market regimes
+- Reference price updates happen on every event - could be optimized for performance if needed
+- CSV export writes to disk synchronously - could be made async for high-frequency simulations
+- Python visualization requires external dependencies (pandas, matplotlib) - provided venv setup to isolate
+
+**Follow-ups**:
+- Calibrate price dynamics parameters for different market conditions
+- Add more sophisticated visualization (order book depth, spread analysis)
+- Consider performance optimizations for high-frequency simulations
+- Add configuration options for price dynamics (drift, volatility, mean reversion strength)
 
 ### Manual additions
 
@@ -93,6 +235,77 @@ Build, test, and run plan
 
 ### Date
 
+2025-01-27
+
+### Author
+
+AI Assistant
+
+### Scope
+
+Issue #21: Full simulation pipeline implementation and visualization
+
+### AI-generated work log
+
+**What changed**: Implemented the complete simulation pipeline from event production through matching engine to deterministic event logging, including visualization tools. Key components:
+
+1. **Event Producer (QR-SDP)**: Implemented Queue-Reactive, State-Dependent Poisson event producer with realistic price dynamics:
+   - Reference price tracking with geometric Brownian motion and mean reversion
+   - Volatility clustering (GARCH-like behavior)
+   - State-dependent intensity calculation based on book state (spread, imbalance, queue sizes)
+   - Deterministic order generation with seed-based RNG
+
+2. **Matching Engine**: Implemented price-time priority matching engine:
+   - Continuous double auction matching
+   - Price-time priority order book with bid/ask queues
+   - Trade generation and book update callbacks
+   - Deterministic event processing
+
+3. **Event Log**: Enhanced deterministic event log with:
+   - Append-only event storage (order events, trade events, book updates)
+   - Sequence number assignment for deterministic ordering
+   - Accessor methods for visualization
+
+4. **Exchange Simulator**: Integrated all components:
+   - Component initialization and wiring
+   - Event processing loop
+   - Console-based event log summary visualization
+   - CSV export for price data
+
+5. **Visualization Tools**:
+   - Console summary with statistics and ASCII price charts
+   - CSV export functionality (timestamp, price, quantity, order IDs)
+   - Python visualization script with comprehensive charts (price over time, distributions, volume, VWAP)
+   - Virtual environment setup scripts for Python tools
+
+**Why**: Issue #21 required implementing the full simulation pipeline up to and including the deterministic event log, then providing visualization tools to assess simulation progress and sanity. The price dynamics needed to be realistic (not just oscillating around a starting position) to match real stock behavior.
+
+**How validated**: 
+- Integration test for determinism (same seed produces identical event logs)
+- Manual verification of price behavior (trends, volatility, realistic movement)
+- CSV export verified with Python visualization tools
+- All components tested in isolation and integrated
+
+**Tradeoffs / risks**:
+- Price dynamics model uses simplified parameters (drift, volatility, mean reversion) - may need calibration for different market regimes
+- Reference price updates happen on every event - could be optimized for performance if needed
+- CSV export writes to disk synchronously - could be made async for high-frequency simulations
+- Python visualization requires external dependencies (pandas, matplotlib) - provided venv setup to isolate
+
+**Follow-ups**:
+- Calibrate price dynamics parameters for different market conditions
+- Add more sophisticated visualization (order book depth, spread analysis)
+- Consider performance optimizations for high-frequency simulations
+- Add configuration options for price dynamics (drift, volatility, mean reversion strength)
+
+### Manual additions
+
+(Human edits, notes, links, context)
+
+---
+
+### Date
+
 2025-12-21
 
 ### Author
@@ -121,6 +334,77 @@ Event log persistence architecture
 
 ### Date
 
+2025-01-27
+
+### Author
+
+AI Assistant
+
+### Scope
+
+Issue #21: Full simulation pipeline implementation and visualization
+
+### AI-generated work log
+
+**What changed**: Implemented the complete simulation pipeline from event production through matching engine to deterministic event logging, including visualization tools. Key components:
+
+1. **Event Producer (QR-SDP)**: Implemented Queue-Reactive, State-Dependent Poisson event producer with realistic price dynamics:
+   - Reference price tracking with geometric Brownian motion and mean reversion
+   - Volatility clustering (GARCH-like behavior)
+   - State-dependent intensity calculation based on book state (spread, imbalance, queue sizes)
+   - Deterministic order generation with seed-based RNG
+
+2. **Matching Engine**: Implemented price-time priority matching engine:
+   - Continuous double auction matching
+   - Price-time priority order book with bid/ask queues
+   - Trade generation and book update callbacks
+   - Deterministic event processing
+
+3. **Event Log**: Enhanced deterministic event log with:
+   - Append-only event storage (order events, trade events, book updates)
+   - Sequence number assignment for deterministic ordering
+   - Accessor methods for visualization
+
+4. **Exchange Simulator**: Integrated all components:
+   - Component initialization and wiring
+   - Event processing loop
+   - Console-based event log summary visualization
+   - CSV export for price data
+
+5. **Visualization Tools**:
+   - Console summary with statistics and ASCII price charts
+   - CSV export functionality (timestamp, price, quantity, order IDs)
+   - Python visualization script with comprehensive charts (price over time, distributions, volume, VWAP)
+   - Virtual environment setup scripts for Python tools
+
+**Why**: Issue #21 required implementing the full simulation pipeline up to and including the deterministic event log, then providing visualization tools to assess simulation progress and sanity. The price dynamics needed to be realistic (not just oscillating around a starting position) to match real stock behavior.
+
+**How validated**: 
+- Integration test for determinism (same seed produces identical event logs)
+- Manual verification of price behavior (trends, volatility, realistic movement)
+- CSV export verified with Python visualization tools
+- All components tested in isolation and integrated
+
+**Tradeoffs / risks**:
+- Price dynamics model uses simplified parameters (drift, volatility, mean reversion) - may need calibration for different market regimes
+- Reference price updates happen on every event - could be optimized for performance if needed
+- CSV export writes to disk synchronously - could be made async for high-frequency simulations
+- Python visualization requires external dependencies (pandas, matplotlib) - provided venv setup to isolate
+
+**Follow-ups**:
+- Calibrate price dynamics parameters for different market conditions
+- Add more sophisticated visualization (order book depth, spread analysis)
+- Consider performance optimizations for high-frequency simulations
+- Add configuration options for price dynamics (drift, volatility, mean reversion strength)
+
+### Manual additions
+
+(Human edits, notes, links, context)
+
+---
+
+### Date
+
 2025-12-18
 
 ### Author
@@ -140,6 +424,77 @@ Pipeline architecture and C++ class structure
 **How validated**: Architecture reviewed for consistency with project goals (determinism, replayability, wire-level fidelity). Interface design verified for low coupling and extensibility.
 
 **Tradeoffs / risks**: Monolithic structure simplifies development but means all components compile together. Interface overhead minimal but provides clear boundaries. Methods are placeholders requiring implementation. Platform-specific UDP socket code needs abstraction layer.
+
+### Manual additions
+
+(Human edits, notes, links, context)
+
+---
+
+### Date
+
+2025-01-27
+
+### Author
+
+AI Assistant
+
+### Scope
+
+Issue #21: Full simulation pipeline implementation and visualization
+
+### AI-generated work log
+
+**What changed**: Implemented the complete simulation pipeline from event production through matching engine to deterministic event logging, including visualization tools. Key components:
+
+1. **Event Producer (QR-SDP)**: Implemented Queue-Reactive, State-Dependent Poisson event producer with realistic price dynamics:
+   - Reference price tracking with geometric Brownian motion and mean reversion
+   - Volatility clustering (GARCH-like behavior)
+   - State-dependent intensity calculation based on book state (spread, imbalance, queue sizes)
+   - Deterministic order generation with seed-based RNG
+
+2. **Matching Engine**: Implemented price-time priority matching engine:
+   - Continuous double auction matching
+   - Price-time priority order book with bid/ask queues
+   - Trade generation and book update callbacks
+   - Deterministic event processing
+
+3. **Event Log**: Enhanced deterministic event log with:
+   - Append-only event storage (order events, trade events, book updates)
+   - Sequence number assignment for deterministic ordering
+   - Accessor methods for visualization
+
+4. **Exchange Simulator**: Integrated all components:
+   - Component initialization and wiring
+   - Event processing loop
+   - Console-based event log summary visualization
+   - CSV export for price data
+
+5. **Visualization Tools**:
+   - Console summary with statistics and ASCII price charts
+   - CSV export functionality (timestamp, price, quantity, order IDs)
+   - Python visualization script with comprehensive charts (price over time, distributions, volume, VWAP)
+   - Virtual environment setup scripts for Python tools
+
+**Why**: Issue #21 required implementing the full simulation pipeline up to and including the deterministic event log, then providing visualization tools to assess simulation progress and sanity. The price dynamics needed to be realistic (not just oscillating around a starting position) to match real stock behavior.
+
+**How validated**: 
+- Integration test for determinism (same seed produces identical event logs)
+- Manual verification of price behavior (trends, volatility, realistic movement)
+- CSV export verified with Python visualization tools
+- All components tested in isolation and integrated
+
+**Tradeoffs / risks**:
+- Price dynamics model uses simplified parameters (drift, volatility, mean reversion) - may need calibration for different market regimes
+- Reference price updates happen on every event - could be optimized for performance if needed
+- CSV export writes to disk synchronously - could be made async for high-frequency simulations
+- Python visualization requires external dependencies (pandas, matplotlib) - provided venv setup to isolate
+
+**Follow-ups**:
+- Calibrate price dynamics parameters for different market conditions
+- Add more sophisticated visualization (order book depth, spread analysis)
+- Consider performance optimizations for high-frequency simulations
+- Add configuration options for price dynamics (drift, volatility, mean reversion strength)
 
 ### Manual additions
 

@@ -35,3 +35,12 @@ Testing/
 # Docker volumes (if used)
 docker-data/
 
+# Python virtual environment
+tools/venv/
+venv/
+env/
+
+# Generated data files (CSV exports, visualizations)
+# Note: Use 'git add -f data/file' if you need to commit specific files
+data/
+
