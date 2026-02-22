@@ -1,5 +1,4 @@
 #include <gtest/gtest.h>
-#include "qrsdp/event_log_parser.h"
 #include "qrsdp/intensity_estimator.h"
 #include "qrsdp/intensity_curve_io.h"
 #include "qrsdp/records.h"
@@ -9,20 +8,6 @@
 
 namespace qrsdp {
 namespace test {
-
-TEST(EventLogParser, ResetAndPush) {
-    EventLogParser parser;
-    parser.reset();
-    EXPECT_EQ(parser.event_count, 0u);
-    EventRecord rec{};
-    rec.type = static_cast<uint8_t>(EventType::ADD_BID);
-    rec.side = 0;
-    rec.price_ticks = 9999;
-    rec.qty = 1;
-    EXPECT_TRUE(parser.push(rec));
-    EXPECT_EQ(parser.event_count, 1u);
-    EXPECT_EQ(parser.best_bid_ticks, 9999);
-}
 
 TEST(IntensityEstimator, LambdaTotalAndType) {
     IntensityEstimator est;

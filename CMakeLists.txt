@@ -53,7 +53,6 @@ set(QRSDP_SOURCES
     src/qrsdp/intensity_curve.cpp
     src/qrsdp/hlr_params.cpp
     src/qrsdp/curve_intensity_model.cpp
-    src/qrsdp/event_log_parser.cpp
     src/qrsdp/intensity_estimator.cpp
     src/qrsdp/intensity_curve_io.cpp
     src/qrsdp/mt19937_rng.cpp

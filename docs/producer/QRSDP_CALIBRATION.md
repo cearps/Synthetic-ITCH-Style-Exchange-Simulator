@@ -1,44 +1,38 @@
 # QRSDP Calibration Scaffold
 
-This document describes the **calibration module** added for HLR2014-style intensity estimation and curve I/O: event log parsing, intensity estimation from sojourn data, and saving/loading intensity curves as JSON.
+This document describes the **calibration module** for HLR2014-style intensity estimation and curve I/O: how to calibrate from simulated event streams (replay + book state), the intensity estimator, and saving/loading intensity curves as JSON.
 
 ---
 
 ## 1. Overview
 
-The scaffold supports future calibration from real or simulated event streams:
+The scaffold supports calibration from **simulated** event streams today:
 
-1. **EventLogParser** — consume event records and reconstruct queue depths (level I/II).
+1. **Calibration from simulator** — replay `EventRecord`s through a `MultiLevelBook`; at each event you have the book state (queue sizes) and can record sojourns for the estimator. No separate event-log parser is needed.
 2. **IntensityEstimator** — accumulate sojourn data (queue size, dwell time, event type) and compute MLE intensity estimates.
 3. **Curve JSON I/O** — save and load `IntensityCurve` tables to/from JSON for use in `CurveIntensityModel` / `HLRParams`.
 
-**Location:** `src/qrsdp/event_log_parser.*`, `intensity_estimator.*`, `intensity_curve_io.*`
+**Location:** `src/qrsdp/intensity_estimator.*`, `intensity_curve_io.*`
+
+When we add support for **external** event logs (e.g. ITCH), we will introduce an event-log parser that reconstructs queue state from the raw stream; until then, calibration uses replay + book state only.
 
 ---
 
-## 2. Event log parser
+## 2. Calibration from simulator: replay + book state
 
-**Header:** `src/qrsdp/event_log_parser.h`
+When the event stream comes from our own producer (e.g. `InMemorySink` of `EventRecord`s), you already have a way to get queue state: **replay the same events through a `MultiLevelBook`** (or the same book).
 
-The parser maintains **reconstructed bid/ask depths** and best bid/ask from a stream of `EventRecord`s. It is a scaffold for later ITCH-like decoding (e.g. level I/II from exchange messages).
+### Pipeline
 
-### API
+1. Run a session: producer writes `EventRecord`s to `InMemorySink`.
+2. Replay: seed a `MultiLevelBook` with the same `BookSeed`, then for each record in order:
+   - You have **queue state before the event** (from the book: `bidDepthAtLevel(k)`, `askDepthAtLevel(k)`).
+   - You have **time** from the previous record (or session start) so you can compute **dwell time** Δt at that state.
+   - Build a `SimEvent` from the record and **apply** it to the book.
+   - The **event type** is in the record.
+3. For each event, record a sojourn: queue size **n** (e.g. at best level), **Δt** since last event, and **type** that occurred. Feed these into `IntensityEstimator::recordSojourn(n, dt, type)`.
 
-| Method / field | Purpose |
-|----------------|--------|
-| `reset()` | Clear state for a new symbol/session. |
-| `push(rec)` | Process one `EventRecord`; update `bid_depths`, `ask_depths`, best bid/ask. Returns `true` if consumed. |
-| `bid_depths`, `ask_depths` | Reconstructed depths per level (index 0 = best). |
-| `best_bid_ticks`, `best_ask_ticks` | Current best prices (0 if unknown). |
-| `event_count` | Number of events pushed. |
-
-### Event handling
-
-- **ADD_BID / ADD_ASK** — increment depth at the level corresponding to `price_ticks`; set best bid/ask on first add.
-- **CANCEL_BID / CANCEL_ASK** — decrement depth at level (clamped to 0).
-- **EXECUTE_BUY / EXECUTE_SELL** — decrement depth at best ask / best bid respectively.
-
-**Limitation:** The scaffold does not yet handle **reference price shifts** (e.g. when best queue empties and the book moves). A full ITCH-style parser would update best bid/ask and level indices on shift.
+No separate “parser” that reconstructs the book from the log is required—the book *is* the state. An event-log parser will be added when we support **external** feeds (e.g. ITCH) where we only have the event stream and must reconstruct the book.
 
 ---
 
@@ -63,15 +57,21 @@ Implements the HLR MLE idea: estimate total intensity and type-specific intensit
 | `lambdaType(n, type)` | λ̂_type(n). Returns 0 if no observations. |
 | `nMaxObserved()` | Largest n with at least one observation. |
 
-### Usage sketch
+### Usage sketch (replay)
 
 ```cpp
 qrsdp::IntensityEstimator est;
 est.reset();
-// For each sojourn (e.g. from replay or live stream):
-//   - queue size n, dwell time dt, and the event type that occurred
-est.recordSojourn(n, dt, EventType::ADD_BID);
-// ...
+// Replay: for each EventRecord (after applying previous), you have book state and dt
+double t_prev = 0.0;
+for (const auto& rec : sink.events()) {
+    double t = rec.ts_ns * 1e-9;
+    double dt = t - t_prev;
+    uint32_t n = book.bidDepthAtLevel(0);  // e.g. best bid queue size
+    est.recordSojourn(n, dt, static_cast<EventType>(rec.type));
+    // apply rec to book, then ...
+    t_prev = t;
+}
 double lambda_tot = est.lambdaTotal(n);
 double lambda_add = est.lambdaType(n, EventType::ADD_BID);
 ```
@@ -135,7 +135,6 @@ No external JSON library is used; the implementation uses minimal in-repo parsin
 
 **File:** `tests/qrsdp/test_calibration.cpp`
 
-- **EventLogParser.ResetAndPush** — reset and push one ADD_BID; checks event_count and best_bid_ticks.
 - **IntensityEstimator.LambdaTotalAndType** — record sojourns at n=5, check Λ̂(5) and λ̂_type(5).
 - **IntensityCurveIo.SaveAndLoad** — save a 3-point curve to JSON, load it back, check values and nMax().
 
@@ -145,7 +144,7 @@ Run the full test suite (e.g. `ctest` or the `tests` target) to execute these.
 
 ## 6. Roadmap (for later)
 
-- **EventLogParser:** extend to read raw ITCH or similar messages; handle reference price shifts and level re-mapping.
+- **Event-log parser:** when adding ITCH (or similar) support, introduce a parser that reconstructs queue state from the raw event stream so we can calibrate from external data without replaying through our book.
 - **IntensityEstimator:** optional weighting (e.g. by time of day), per-level curves (bid/ask, level index).
 - **Curve I/O:** optional HLRParams-level JSON (all curves for one symbol/side), validation and schema hints.
-- **Calibration pipeline:** replay EventRecord stream → EventLogParser + sojourn extraction → IntensityEstimator → export curves to JSON → load into `CurveIntensityModel` for simulation.
+- **Calibration pipeline:** replay EventRecord stream → book state + sojourn extraction → IntensityEstimator → export curves to JSON → load into `CurveIntensityModel` for simulation. (For external logs: event parser → reconstructed state + sojourns → same pipeline.)
