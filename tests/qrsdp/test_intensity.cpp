@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include "qrsdp/simple_imbalance_intensity.h"
-#include "qrsdp/records.h"
+#include "model/simple_imbalance_intensity.h"
+#include "core/records.h"
 #include <cmath>
 
 namespace qrsdp {

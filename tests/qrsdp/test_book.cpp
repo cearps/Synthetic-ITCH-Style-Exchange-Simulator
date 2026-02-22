@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include "qrsdp/multi_level_book.h"
-#include "qrsdp/records.h"
+#include "book/multi_level_book.h"
+#include "core/records.h"
 
 namespace qrsdp {
 namespace test {

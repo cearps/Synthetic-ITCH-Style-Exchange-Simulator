@@ -30,4 +30,4 @@ services:
     working_dir: /app
     ports:
       - "9999:9999/udp"
-    command: ["/app/build/itch_simulator", "--seed", "12345"]
+    command: ["/app/build/qrsdp_cli", "12345", "30"]

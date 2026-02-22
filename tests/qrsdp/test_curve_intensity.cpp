@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
-#include "qrsdp/intensity_curve.h"
-#include "qrsdp/hlr_params.h"
-#include "qrsdp/curve_intensity_model.h"
-#include "qrsdp/records.h"
-#include "qrsdp/event_types.h"
+#include "model/intensity_curve.h"
+#include "model/hlr_params.h"
+#include "model/curve_intensity_model.h"
+#include "core/records.h"
+#include "core/event_types.h"
 #include <cmath>
 #include <vector>
 

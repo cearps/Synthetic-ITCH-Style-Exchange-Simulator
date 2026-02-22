@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
-#include "qrsdp/competing_intensity_sampler.h"
-#include "qrsdp/mt19937_rng.h"
-#include "qrsdp/records.h"
+#include "sampler/competing_intensity_sampler.h"
+#include "rng/mt19937_rng.h"
+#include "core/records.h"
 #include <cmath>
 #include <cstddef>
 #include <vector>

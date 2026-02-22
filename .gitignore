@@ -36,3 +36,4 @@ Testing/
 # Docker volumes (if used)
 docker-data/
 
+venv/

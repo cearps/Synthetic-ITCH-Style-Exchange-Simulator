@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(itch_simulator VERSION 0.1.0 LANGUAGES CXX)
+project(qrsdp_simulator VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,89 +20,48 @@ endif()
 # Include directories
 include_directories(src)
 
-# Source files
-set(CORE_SOURCES
-    src/core/events.cpp
-    src/core/order.cpp
+# Source files — organised by subdirectory
+set(BOOK_SOURCES      src/book/multi_level_book.cpp)
+set(MODEL_SOURCES
+    src/model/simple_imbalance_intensity.cpp
+    src/model/curve_intensity_model.cpp
+    src/model/hlr_params.cpp
+    src/model/intensity_curve.cpp
 )
-
-set(PRODUCER_SOURCES
-    src/producer/event_producer.cpp
+set(CALIBRATION_SOURCES
+    src/calibration/intensity_estimator.cpp
+    src/calibration/intensity_curve_io.cpp
 )
-
-set(MATCHING_SOURCES
-    src/matching/order_book.cpp
-    src/matching/matching_engine.cpp
+set(SAMPLER_SOURCES
+    src/sampler/competing_intensity_sampler.cpp
+    src/sampler/unit_size_attribute_sampler.cpp
 )
+set(RNG_SOURCES       src/rng/mt19937_rng.cpp)
+set(IO_SOURCES        src/io/in_memory_sink.cpp)
+set(PRODUCER_SOURCES  src/producer/qrsdp_producer.cpp)
 
-set(LOGGING_SOURCES
-    src/logging/event_log.cpp
-)
-
-set(ENCODING_SOURCES
-    src/encoding/itch_encoder.cpp
-)
-
-set(STREAMING_SOURCES
-    src/streaming/udp_streamer.cpp
-)
-
-set(QRSDP_SOURCES
-    src/qrsdp/multi_level_book.cpp
-    src/qrsdp/simple_imbalance_intensity.cpp
-    src/qrsdp/intensity_curve.cpp
-    src/qrsdp/hlr_params.cpp
-    src/qrsdp/curve_intensity_model.cpp
-    src/qrsdp/intensity_estimator.cpp
-    src/qrsdp/intensity_curve_io.cpp
-    src/qrsdp/mt19937_rng.cpp
-    src/qrsdp/competing_intensity_sampler.cpp
-    src/qrsdp/unit_size_attribute_sampler.cpp
-    src/qrsdp/in_memory_sink.cpp
-    src/qrsdp/qrsdp_producer.cpp
-)
-
-set(SIMULATOR_SOURCES
-    src/exchange_simulator.cpp
-    src/main.cpp
-)
-
-# Combine all sources
-set(ALL_SOURCES
-    ${CORE_SOURCES}
-    ${PRODUCER_SOURCES}
-    ${MATCHING_SOURCES}
-    ${LOGGING_SOURCES}
-    ${ENCODING_SOURCES}
-    ${STREAMING_SOURCES}
-    ${SIMULATOR_SOURCES}
-)
-
-# Main executable (exclude main.cpp from ALL_SOURCES since it's in SIMULATOR_SOURCES)
 set(LIBRARY_SOURCES
-    ${CORE_SOURCES}
+    ${BOOK_SOURCES}
+    ${MODEL_SOURCES}
+    ${CALIBRATION_SOURCES}
+    ${SAMPLER_SOURCES}
+    ${RNG_SOURCES}
+    ${IO_SOURCES}
     ${PRODUCER_SOURCES}
-    ${MATCHING_SOURCES}
-    ${LOGGING_SOURCES}
-    ${ENCODING_SOURCES}
-    ${STREAMING_SOURCES}
-    ${QRSDP_SOURCES}
-    src/exchange_simulator.cpp
 )
 
-# Static library for main executable, tests, and optional tools (qrsdp_ui)
+# Static library shared by CLI, tests, and UI
 add_library(simulator_lib STATIC ${LIBRARY_SOURCES})
 
-# Main executable
-add_executable(itch_simulator ${SIMULATOR_SOURCES})
-target_link_libraries(itch_simulator PRIVATE simulator_lib)
+# Headless CLI executable
+add_executable(qrsdp_cli src/main.cpp)
+target_link_libraries(qrsdp_cli PRIVATE simulator_lib)
 
 # Google Test setup
 option(BUILD_TESTING "Enable testing" ON)
 if(BUILD_TESTING)
     enable_testing()
-    
-    # Download Google Test
+
     include(FetchContent)
     FetchContent_Declare(
         googletest
@@ -110,8 +69,7 @@ if(BUILD_TESTING)
         GIT_TAG        v1.14.0
     )
     FetchContent_MakeAvailable(googletest)
-    
-    # Test sources (QRSDP v1; previous implementation tests removed)
+
     set(TEST_SOURCES
         tests/qrsdp/test_records.cpp
         tests/qrsdp/test_interfaces.cpp
@@ -123,7 +81,7 @@ if(BUILD_TESTING)
         tests/qrsdp/test_attribute_sampler.cpp
         tests/qrsdp/test_producer.cpp
     )
-    
+
     if(TEST_SOURCES)
         add_executable(tests ${TEST_SOURCES})
         target_link_libraries(tests PRIVATE simulator_lib gtest_main)
@@ -140,19 +98,18 @@ endif()
 
 # Platform-specific libraries
 if(WIN32)
-    target_link_libraries(itch_simulator PRIVATE ws2_32)
+    target_link_libraries(qrsdp_cli PRIVATE ws2_32)
     if(BUILD_TESTING AND TEST_SOURCES)
         target_link_libraries(tests PRIVATE ws2_32)
     endif()
 else()
-    target_link_libraries(itch_simulator PRIVATE pthread)
+    target_link_libraries(qrsdp_cli PRIVATE pthread)
     if(BUILD_TESTING AND TEST_SOURCES)
         target_link_libraries(tests PRIVATE pthread)
     endif()
 endif()
 
-# Install rules (optional, for packaging)
-install(TARGETS itch_simulator
+# Install rules
+install(TARGETS qrsdp_cli
     RUNTIME DESTINATION bin
 )
-

@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
-#include "qrsdp/intensity_estimator.h"
-#include "qrsdp/intensity_curve_io.h"
-#include "qrsdp/records.h"
-#include "qrsdp/event_types.h"
+#include "calibration/intensity_estimator.h"
+#include "calibration/intensity_curve_io.h"
+#include "core/records.h"
+#include "core/event_types.h"
 #include <cstdio>
 #include <string>
 
@@ -25,7 +25,7 @@ TEST(IntensityEstimator, LambdaTotalAndType) {
 TEST(IntensityCurveIo, SaveAndLoad) {
     IntensityCurve c;
     c.setTable({1.0, 2.0, 3.0}, IntensityCurve::TailRule::FLAT);
-    const std::string path = "/tmp/test_curve_io.json";
+    const std::string path = "test_curve_io_tmp.json";
     ASSERT_TRUE(saveCurveToJson(path, c));
     IntensityCurve loaded;
     ASSERT_TRUE(loadCurveFromJson(path, loaded));

@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include "qrsdp/records.h"
-#include "qrsdp/event_types.h"
+#include "core/records.h"
+#include "core/event_types.h"
 #include <type_traits>
 
 namespace qrsdp {

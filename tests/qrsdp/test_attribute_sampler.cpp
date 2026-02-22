@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
-#include "qrsdp/unit_size_attribute_sampler.h"
-#include "qrsdp/multi_level_book.h"
-#include "qrsdp/mt19937_rng.h"
-#include "qrsdp/records.h"
+#include "sampler/unit_size_attribute_sampler.h"
+#include "book/multi_level_book.h"
+#include "rng/mt19937_rng.h"
+#include "core/records.h"
 
 namespace qrsdp {
 namespace test {
