@@ -47,6 +47,16 @@ set(STREAMING_SOURCES
     src/streaming/udp_streamer.cpp
 )
 
+set(QRSDP_SOURCES
+    src/qrsdp/multi_level_book.cpp
+    src/qrsdp/simple_imbalance_intensity.cpp
+    src/qrsdp/mt19937_rng.cpp
+    src/qrsdp/competing_intensity_sampler.cpp
+    src/qrsdp/unit_size_attribute_sampler.cpp
+    src/qrsdp/in_memory_sink.cpp
+    src/qrsdp/qrsdp_producer.cpp
+)
+
 set(SIMULATOR_SOURCES
     src/exchange_simulator.cpp
     src/main.cpp
@@ -71,11 +81,16 @@ set(LIBRARY_SOURCES
     ${LOGGING_SOURCES}
     ${ENCODING_SOURCES}
     ${STREAMING_SOURCES}
+    ${QRSDP_SOURCES}
     src/exchange_simulator.cpp
 )
 
+# Static library for main executable, tests, and optional tools (qrsdp_ui)
+add_library(simulator_lib STATIC ${LIBRARY_SOURCES})
+
 # Main executable
-add_executable(itch_simulator ${SIMULATOR_SOURCES} ${LIBRARY_SOURCES})
+add_executable(itch_simulator ${SIMULATOR_SOURCES})
+target_link_libraries(itch_simulator PRIVATE simulator_lib)
 
 # Google Test setup
 option(BUILD_TESTING "Enable testing" ON)
@@ -91,28 +106,29 @@ if(BUILD_TESTING)
     )
     FetchContent_MakeAvailable(googletest)
     
-    # Test sources
+    # Test sources (QRSDP v1; previous implementation tests removed)
     set(TEST_SOURCES
-        tests/core/test_events.cpp
-        tests/core/test_order.cpp
-        tests/producer/test_event_producer.cpp
-        tests/matching/test_order_book.cpp
-        tests/matching/test_matching_engine.cpp
-        tests/logging/test_event_log.cpp
-        tests/encoding/test_itch_encoder.cpp
-        tests/streaming/test_udp_streamer.cpp
-        # Add more test files here as they are created
+        tests/qrsdp/test_records.cpp
+        tests/qrsdp/test_interfaces.cpp
+        tests/qrsdp/test_book.cpp
+        tests/qrsdp/test_intensity.cpp
+        tests/qrsdp/test_sampler.cpp
+        tests/qrsdp/test_attribute_sampler.cpp
+        tests/qrsdp/test_producer.cpp
     )
     
     if(TEST_SOURCES)
-        add_executable(tests ${TEST_SOURCES} ${LIBRARY_SOURCES})
-        target_link_libraries(tests 
-            PRIVATE 
-            gtest_main
-        )
+        add_executable(tests ${TEST_SOURCES})
+        target_link_libraries(tests PRIVATE simulator_lib gtest_main)
         include(GoogleTest)
         gtest_discover_tests(tests)
     endif()
+endif()
+
+# Optional QRSDP debugging UI (ImGui + ImPlot + GLFW)
+option(BUILD_QRSDP_UI "Build qrsdp_ui debugging tool" ON)
+if(BUILD_QRSDP_UI AND EXISTS "${CMAKE_SOURCE_DIR}/tools/qrsdp_ui/CMakeLists.txt")
+    add_subdirectory(tools/qrsdp_ui)
 endif()
 
 # Platform-specific libraries

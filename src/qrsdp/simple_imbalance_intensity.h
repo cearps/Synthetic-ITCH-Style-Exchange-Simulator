@@ -1,0 +1,18 @@
+#pragma once
+
+#include "qrsdp/i_intensity_model.h"
+#include "qrsdp/records.h"
+
+namespace qrsdp {
+
+/// Simple imbalance-driven intensities: add mean-reverts, exec follows pressure, cancel ∝ queue.
+class SimpleImbalanceIntensity : public IIntensityModel {
+public:
+    explicit SimpleImbalanceIntensity(const IntensityParams& params);
+    Intensities compute(const BookFeatures&) const override;
+
+private:
+    IntensityParams params_;
+};
+
+}  // namespace qrsdp
