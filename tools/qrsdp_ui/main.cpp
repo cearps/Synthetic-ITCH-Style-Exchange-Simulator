@@ -111,10 +111,10 @@ int main(int argc, char** argv) {
     int32_t ui_p0_ticks = 10000;
     uint32_t ui_levels_per_side = 5;
     uint32_t ui_tick_size = 100;
-    uint32_t ui_initial_depth = 50;
+    uint32_t ui_initial_depth = 2;
     uint32_t ui_initial_spread_ticks = 2;
-    double ui_base_L = 20.0;
-    double ui_base_M = 5.0;
+    double ui_base_L = 5.0;
+    double ui_base_M = 30.0;
     double ui_base_C = 0.1;
     double ui_epsilon_exec = 0.2;
     double ui_alpha = 0.5;
@@ -336,7 +336,8 @@ int main(int argc, char** argv) {
         if (ui_model == 1) {
             ImGui::Separator();
             ImGui::Text("Queue-reactive (HLR2014 Model III)");
-            ImGui::SliderScalar("theta_reinit", ImGuiDataType_Double, &ui_theta_reinit, 0.0, 1.0, "%.2f");
+            const double theta_min = 0.0, theta_max = 1.0;
+            ImGui::SliderScalar("theta_reinit", ImGuiDataType_Double, &ui_theta_reinit, &theta_min, &theta_max, "%.2f");
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("Prob to reinitialize book after a shift (Poisson depths)");
             ImGui::InputDouble("reinit_depth_mean", &ui_reinit_mean, 1.0, 0, "%.1f");
@@ -406,9 +407,20 @@ int main(int argc, char** argv) {
             ImGui::Text("lambda_total (Lambda) = %.4f", intens.total());
             ImGui::Text("add_bid=%.3f add_ask=%.3f cancel_bid=%.3f cancel_ask=%.3f exec_buy=%.3f exec_sell=%.3f",
                         intens.add_bid, intens.add_ask, intens.cancel_bid, intens.cancel_ask, intens.exec_buy, intens.exec_sell);
-            const double net_bid_drift = intens.exec_sell + intens.cancel_bid - intens.add_bid;
-            const double net_ask_drift = intens.exec_buy + intens.cancel_ask - intens.add_ask;
-            ImGui::Text("drift at best: bid=%.4f ask=%.4f", net_bid_drift, net_ask_drift);
+            double p0_add = 1.0;
+            if (ui_levels_per_side > 1) {
+                double wsum = 0.0;
+                for (uint32_t kk = 0; kk < ui_levels_per_side; ++kk)
+                    wsum += std::exp(-ui_alpha * static_cast<double>(kk));
+                if (wsum > 0.0) p0_add = 1.0 / wsum;
+            }
+            const double eff_add_bid = intens.add_bid * p0_add;
+            const double eff_add_ask = intens.add_ask * p0_add;
+            const double eff_cancel_bid = ui_base_C * static_cast<double>(f.q_bid_best);
+            const double eff_cancel_ask = ui_base_C * static_cast<double>(f.q_ask_best);
+            const double net_bid_drift = intens.exec_sell + eff_cancel_bid - eff_add_bid;
+            const double net_ask_drift = intens.exec_buy + eff_cancel_ask - eff_add_ask;
+            ImGui::Text("drift at best: bid=%.4f ask=%.4f  (P0=%.3f)", net_bid_drift, net_ask_drift, p0_add);
             const double exec_total = intens.exec_buy + intens.exec_sell;
             if (exec_total < 0.01 && ui_model == 0) {
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0.5f, 0, 1));

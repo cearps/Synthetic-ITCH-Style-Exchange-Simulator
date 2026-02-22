@@ -81,9 +81,10 @@ void MultiLevelBook::apply(const SimEvent& e) {
             const int idx = bidIndexForPrice(e.price_ticks);
             if (idx >= 0 && static_cast<size_t>(idx) < num_levels_) {
                 auto& d = bid_levels_[static_cast<size_t>(idx)].depth;
+                const bool was_nonzero = (d > 0);
                 if (d >= e.qty) d -= e.qty;
                 else d = 0;
-                if (idx == 0 && d == 0) shiftBidBook();
+                if (idx == 0 && d == 0 && was_nonzero) shiftBidBook();
             }
             break;
         }
@@ -91,9 +92,10 @@ void MultiLevelBook::apply(const SimEvent& e) {
             const int idx = askIndexForPrice(e.price_ticks);
             if (idx >= 0 && static_cast<size_t>(idx) < num_levels_) {
                 auto& d = ask_levels_[static_cast<size_t>(idx)].depth;
+                const bool was_nonzero = (d > 0);
                 if (d >= e.qty) d -= e.qty;
                 else d = 0;
-                if (idx == 0 && d == 0) shiftAskBook();
+                if (idx == 0 && d == 0 && was_nonzero) shiftAskBook();
             }
             break;
         }
@@ -165,34 +167,42 @@ uint32_t MultiLevelBook::askDepthAtLevel(size_t k) const {
 }
 
 void MultiLevelBook::shiftBidBook() {
-    if (num_levels_ <= 1) {
-        bid_levels_[0].price_ticks -= 1;
-        bid_levels_[0].depth = initial_depth_;
-    } else {
-        for (size_t i = 0; i + 1 < num_levels_; ++i) {
-            bid_levels_[i] = bid_levels_[i + 1];
+    constexpr size_t kMaxCascade = 64;
+    for (size_t cascade = 0; cascade < kMaxCascade; ++cascade) {
+        if (num_levels_ <= 1) {
+            bid_levels_[0].price_ticks -= 1;
+            bid_levels_[0].depth = initial_depth_;
+        } else {
+            for (size_t i = 0; i + 1 < num_levels_; ++i) {
+                bid_levels_[i] = bid_levels_[i + 1];
+            }
+            bid_levels_[num_levels_ - 1].price_ticks = bid_levels_[num_levels_ - 2].price_ticks - 1;
+            bid_levels_[num_levels_ - 1].depth = initial_depth_;
         }
-        bid_levels_[num_levels_ - 1].price_ticks = bid_levels_[num_levels_ - 2].price_ticks - 1;
-        bid_levels_[num_levels_ - 1].depth = initial_depth_;
-    }
-    for (size_t k = 0; k < num_levels_; ++k) {
-        ask_levels_[k].price_ticks -= 1;
+        for (size_t k = 0; k < num_levels_; ++k) {
+            ask_levels_[k].price_ticks -= 1;
+        }
+        if (bid_levels_[0].depth > 0) break;
     }
 }
 
 void MultiLevelBook::shiftAskBook() {
-    if (num_levels_ <= 1) {
-        ask_levels_[0].price_ticks += 1;
-        ask_levels_[0].depth = initial_depth_;
-    } else {
-        for (size_t i = 0; i + 1 < num_levels_; ++i) {
-            ask_levels_[i] = ask_levels_[i + 1];
+    constexpr size_t kMaxCascade = 64;
+    for (size_t cascade = 0; cascade < kMaxCascade; ++cascade) {
+        if (num_levels_ <= 1) {
+            ask_levels_[0].price_ticks += 1;
+            ask_levels_[0].depth = initial_depth_;
+        } else {
+            for (size_t i = 0; i + 1 < num_levels_; ++i) {
+                ask_levels_[i] = ask_levels_[i + 1];
+            }
+            ask_levels_[num_levels_ - 1].price_ticks = ask_levels_[num_levels_ - 2].price_ticks + 1;
+            ask_levels_[num_levels_ - 1].depth = initial_depth_;
         }
-        ask_levels_[num_levels_ - 1].price_ticks = ask_levels_[num_levels_ - 2].price_ticks + 1;
-        ask_levels_[num_levels_ - 1].depth = initial_depth_;
-    }
-    for (size_t k = 0; k < num_levels_; ++k) {
-        bid_levels_[k].price_ticks += 1;
+        for (size_t k = 0; k < num_levels_; ++k) {
+            bid_levels_[k].price_ticks += 1;
+        }
+        if (ask_levels_[0].depth > 0) break;
     }
 }
 

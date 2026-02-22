@@ -1,4 +1,4 @@
-# Queue-Reactive, State-Dependent Poisson (QR-SDP) Event Producer
+ Queue-Reactive, State-Dependent Poisson (QR-SDP) Event Producer
 
 This document explains the **initial market event producer algorithm** for the Synthetic ITCH Exchange Simulator, based on a Queue-Reactive, State-Dependent Poisson (QR-SDP) model.
 

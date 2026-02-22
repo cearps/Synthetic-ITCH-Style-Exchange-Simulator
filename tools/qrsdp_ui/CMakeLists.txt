@@ -44,6 +44,8 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/epezent/implot.git
     GIT_TAG        v0.16
 )
+# CMP0169: use OLD to allow FetchContent_Populate until we switch to implot's own CMake
+cmake_policy(SET CMP0169 OLD)
 FetchContent_Populate(implot)
 add_library(implot STATIC
     ${implot_SOURCE_DIR}/implot.cpp

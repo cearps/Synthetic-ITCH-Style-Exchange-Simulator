@@ -6,6 +6,12 @@
 
 namespace qrsdp {
 
+// --- EventRecord flags ---
+constexpr uint32_t kFlagNone      = 0x0;
+constexpr uint32_t kFlagShiftUp   = 0x1;  // best ask moved up (ask-side depletion)
+constexpr uint32_t kFlagShiftDown = 0x2;  // best bid moved down (bid-side depletion)
+constexpr uint32_t kFlagReinit    = 0x4;  // book depths were reinitialized after this shift
+
 // --- EventRecord (fixed width, packed) ---
 #pragma pack(push, 1)
 struct EventRecord {

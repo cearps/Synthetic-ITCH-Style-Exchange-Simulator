@@ -77,13 +77,21 @@ bool QrsdpProducer::stepOneEvent(IEventSink& sink) {
     book_->apply(ev);
     const int32_t new_bid = book_->bestBid().price_ticks;
     const int32_t new_ask = book_->bestAsk().price_ticks;
-    const bool shift_occurred = (new_bid != prev_bid || new_ask != prev_ask);
+    const bool bid_shifted = (new_bid != prev_bid);
+    const bool ask_shifted = (new_ask != prev_ask);
+    const bool shift_occurred = bid_shifted || ask_shifted;
+    bool reinit_happened = false;
     if (shift_occurred) {
         ++shift_count_;
         if (theta_reinit_ > 0.0 && rng_->uniform() < theta_reinit_) {
             book_->reinitialize(*rng_, reinit_mean_);
+            reinit_happened = true;
         }
     }
+    uint32_t flags = kFlagNone;
+    if (new_bid < prev_bid) flags |= kFlagShiftDown;
+    if (new_ask > prev_ask) flags |= kFlagShiftUp;
+    if (reinit_happened)    flags |= kFlagReinit;
     EventRecord rec;
     rec.ts_ns = static_cast<uint64_t>(t_ * 1e9);
     rec.type = static_cast<uint8_t>(type);
@@ -91,7 +99,7 @@ bool QrsdpProducer::stepOneEvent(IEventSink& sink) {
     rec.price_ticks = attrs.price_ticks;
     rec.qty = attrs.qty;
     rec.order_id = ev.order_id;
-    rec.flags = 0;
+    rec.flags = flags;
     sink.append(rec);
     ++events_written_;
     return true;
