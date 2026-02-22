@@ -83,6 +83,7 @@ void MultiLevelBook::apply(const SimEvent& e) {
                 auto& d = bid_levels_[static_cast<size_t>(idx)].depth;
                 if (d >= e.qty) d -= e.qty;
                 else d = 0;
+                if (idx == 0 && d == 0) shiftBidBook();
             }
             break;
         }
@@ -92,6 +93,7 @@ void MultiLevelBook::apply(const SimEvent& e) {
                 auto& d = ask_levels_[static_cast<size_t>(idx)].depth;
                 if (d >= e.qty) d -= e.qty;
                 else d = 0;
+                if (idx == 0 && d == 0) shiftAskBook();
             }
             break;
         }
@@ -163,19 +165,35 @@ uint32_t MultiLevelBook::askDepthAtLevel(size_t k) const {
 }
 
 void MultiLevelBook::shiftBidBook() {
-    for (size_t i = 0; i + 1 < num_levels_; ++i) {
-        bid_levels_[i] = bid_levels_[i + 1];
+    if (num_levels_ <= 1) {
+        bid_levels_[0].price_ticks -= 1;
+        bid_levels_[0].depth = initial_depth_;
+    } else {
+        for (size_t i = 0; i + 1 < num_levels_; ++i) {
+            bid_levels_[i] = bid_levels_[i + 1];
+        }
+        bid_levels_[num_levels_ - 1].price_ticks = bid_levels_[num_levels_ - 2].price_ticks - 1;
+        bid_levels_[num_levels_ - 1].depth = initial_depth_;
     }
-    bid_levels_[num_levels_ - 1].price_ticks = bid_levels_[num_levels_ - 2].price_ticks - 1;
-    bid_levels_[num_levels_ - 1].depth = initial_depth_;
+    for (size_t k = 0; k < num_levels_; ++k) {
+        ask_levels_[k].price_ticks -= 1;
+    }
 }
 
 void MultiLevelBook::shiftAskBook() {
-    for (size_t i = 0; i + 1 < num_levels_; ++i) {
-        ask_levels_[i] = ask_levels_[i + 1];
+    if (num_levels_ <= 1) {
+        ask_levels_[0].price_ticks += 1;
+        ask_levels_[0].depth = initial_depth_;
+    } else {
+        for (size_t i = 0; i + 1 < num_levels_; ++i) {
+            ask_levels_[i] = ask_levels_[i + 1];
+        }
+        ask_levels_[num_levels_ - 1].price_ticks = ask_levels_[num_levels_ - 2].price_ticks + 1;
+        ask_levels_[num_levels_ - 1].depth = initial_depth_;
     }
-    ask_levels_[num_levels_ - 1].price_ticks = ask_levels_[num_levels_ - 2].price_ticks + 1;
-    ask_levels_[num_levels_ - 1].depth = initial_depth_;
+    for (size_t k = 0; k < num_levels_; ++k) {
+        bid_levels_[k].price_ticks += 1;
+    }
 }
 
 void MultiLevelBook::reinitialize(IRng& rng, double depth_mean) {

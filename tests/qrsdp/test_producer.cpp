@@ -191,8 +191,8 @@ TEST(QrsdpProducer, TraceShiftAndPrintFirst20) {
         const int32_t prev_bid = replayBook.bestBid().price_ticks;
         const int32_t prev_ask = replayBook.bestAsk().price_ticks;
         if (i < print_limit) {
-            std::printf("[%zu] ts_ns=%lu type=%u side=%u price=%d qty=%u order_id=%lu\n",
-                        i, rec.ts_ns, rec.type, rec.side, rec.price_ticks, rec.qty, rec.order_id);
+            std::printf("[%zu] ts_ns=%llu type=%u side=%u price=%d qty=%u order_id=%llu\n",
+                        i, (unsigned long long)rec.ts_ns, rec.type, rec.side, rec.price_ticks, rec.qty, (unsigned long long)rec.order_id);
         }
         SimEvent ev = recordToSimEvent(rec);
         replayBook.apply(ev);
@@ -207,8 +207,8 @@ TEST(QrsdpProducer, TraceShiftAndPrintFirst20) {
         EXPECT_GE(ask.price_ticks - bid.price_ticks, 1) << "spread >= 1 after event " << i;
     }
 
-    std::printf("events_written=%lu close_ticks=%d shift_count=%d\n",
-                result.events_written, result.close_ticks, shift_count);
+    std::printf("events_written=%llu close_ticks=%d shift_count=%d\n",
+                (unsigned long long)result.events_written, result.close_ticks, shift_count);
 }
 
 // --- HLR2014 Model I (curve intensity) tests ---

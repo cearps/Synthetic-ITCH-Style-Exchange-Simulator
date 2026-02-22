@@ -16,24 +16,24 @@ std::vector<double> makeTable(int n_max, double (*f)(int)) {
     return t;
 }
 
-// Add at best: flat except lower at n=0.
+// Add at best: moderate flat rate, lower at n=0 (empty queue attracts fewer adds).
 double addBest(int n) {
-    if (n == 0) return 2.0;
-    return 5.0;
+    if (n == 0) return 1.0;
+    return 2.5;
 }
 // Add deeper: decreasing with n.
 double addDeeper(int n) {
-    return 4.0 / (1.0 + 0.1 * static_cast<double>(n));
+    return 2.0 / (1.0 + 0.15 * static_cast<double>(n));
 }
-// Cancel: increasing concave then flatten.
+// Cancel: linear in n (each order independently cancellable).
 double cancelCurve(int n) {
     if (n == 0) return 0.0;
-    return 0.05 * std::sqrt(static_cast<double>(n)) + 0.02 * n;
+    return 0.15 * static_cast<double>(n);
 }
-// Market at best: decreasing with n (liquidity scarcity).
+// Market at best: roughly constant external flow, mild decay.
 double marketCurve(int n) {
     if (n == 0) return 0.5;
-    return 2.0 / (1.0 + 0.2 * static_cast<double>(n));
+    return 1.0 / (1.0 + 0.005 * static_cast<double>(n));
 }
 
 }  // namespace
