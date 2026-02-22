@@ -9,7 +9,7 @@ namespace qrsdp {
 class SimpleImbalanceIntensity : public IIntensityModel {
 public:
     explicit SimpleImbalanceIntensity(const IntensityParams& params);
-    Intensities compute(const BookFeatures&) const override;
+    Intensities compute(const BookState& state) const override;
 
 private:
     IntensityParams params_;

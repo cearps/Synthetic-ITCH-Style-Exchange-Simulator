@@ -41,6 +41,13 @@ TEST(QrsdpRecords, TradingSessionAndSessionResult) {
     EXPECT_EQ(r.events_written, 1000u);
 }
 
+TEST(QrsdpRecords, BookStateWrapsFeatures) {
+    BookState state;
+    state.features = BookFeatures{9999, 10001, 50, 50, 2, 0.0};
+    EXPECT_EQ(state.features.spread_ticks, 2);
+    EXPECT_EQ(state.features.q_bid_best, 50u);
+}
+
 TEST(QrsdpRecords, BookFeaturesAndLevel) {
     BookFeatures f{9999, 10001, 50, 50, 2, 0.0};
     EXPECT_EQ(f.spread_ticks, 2);

@@ -33,14 +33,15 @@ void QrsdpProducer::startSession(const TradingSession& session) {
 
 bool QrsdpProducer::stepOneEvent(IEventSink& sink) {
     if (t_ >= session_seconds_) return false;
-    const BookFeatures f = book_->features();
-    const Intensities intens = intensityModel_->compute(f);
+    BookState state;
+    state.features = book_->features();
+    const Intensities intens = intensityModel_->compute(state);
     const double lambda_total = intens.total();
     const double dt = eventSampler_->sampleDeltaT(lambda_total);
     t_ += dt;
     if (t_ >= session_seconds_) return false;
     const EventType type = eventSampler_->sampleType(intens);
-    const EventAttrs attrs = attributeSampler_->sample(type, *book_, f);
+    const EventAttrs attrs = attributeSampler_->sample(type, *book_, state.features);
     SimEvent ev;
     ev.type = type;
     ev.side = attrs.side;

@@ -354,7 +354,9 @@ int main(int argc, char** argv) {
         ImGui::Begin("Top-of-book / Diagnostics");
         qrsdp::Level bid = book.bestBid();
         qrsdp::Level ask = book.bestAsk();
-        qrsdp::BookFeatures f = book.features();
+        qrsdp::BookState state;
+        state.features = book.features();
+        const qrsdp::BookFeatures& f = state.features;
         ImGui::Text("t = %.3f s   event_count = %lu", producer->currentTime(), (unsigned long)event_count);
         ImGui::Text("best_bid = %d   best_ask = %d   spread = %d", bid.price_ticks, ask.price_ticks, f.spread_ticks);
         ImGui::Text("best_bid_depth = %u   best_ask_depth = %u", bid.depth, ask.depth);
@@ -362,7 +364,7 @@ int main(int argc, char** argv) {
         ImGui::Separator();
         // Real-time intensities (exact producer logic via same model)
         {
-            qrsdp::Intensities intens = intensityModel->compute(f);
+            qrsdp::Intensities intens = intensityModel->compute(state);
             ImGui::Text("lambda_add_bid   = %.4f   lambda_add_ask   = %.4f", intens.add_bid, intens.add_ask);
             ImGui::Text("lambda_exec_buy  = %.4f   lambda_exec_sell = %.4f", intens.exec_buy, intens.exec_sell);
             ImGui::Text("lambda_cancel_bid= %.4f   lambda_cancel_ask= %.4f", intens.cancel_bid, intens.cancel_ask);

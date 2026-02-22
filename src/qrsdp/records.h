@@ -63,6 +63,13 @@ struct BookFeatures {
     double   imbalance;
 };
 
+// --- Full book state (extensible for HLR per-level queues) ---
+struct BookState {
+    BookFeatures features;
+    // Phase 2: optional per-level depths for queue-reactive model, e.g.:
+    // std::vector<uint32_t> bid_depths, ask_depths;
+};
+
 // --- Intensities (6 rates for competing risks) ---
 struct Intensities {
     double add_bid;

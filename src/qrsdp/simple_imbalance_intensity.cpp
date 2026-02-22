@@ -19,7 +19,8 @@ double clampNonNegative(double x) {
 SimpleImbalanceIntensity::SimpleImbalanceIntensity(const IntensityParams& params)
     : params_(params) {}
 
-Intensities SimpleImbalanceIntensity::compute(const BookFeatures& f) const {
+Intensities SimpleImbalanceIntensity::compute(const BookState& state) const {
+    const BookFeatures& f = state.features;
     const double I = std::isnan(f.imbalance) ? 0.0 : f.imbalance;
     const double q_bid = static_cast<double>(f.q_bid_best);
     const double q_ask = static_cast<double>(f.q_ask_best);
