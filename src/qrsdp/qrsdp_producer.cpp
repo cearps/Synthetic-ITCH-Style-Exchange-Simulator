@@ -1,6 +1,8 @@
 #include "qrsdp/qrsdp_producer.h"
+#include "qrsdp/curve_intensity_model.h"
 #include <cmath>
 #include <cstdint>
+#include <vector>
 
 namespace qrsdp {
 
@@ -35,13 +37,30 @@ bool QrsdpProducer::stepOneEvent(IEventSink& sink) {
     if (t_ >= session_seconds_) return false;
     BookState state;
     state.features = book_->features();
+    const size_t num_levels = book_->numLevels();
+    state.bid_depths.reserve(num_levels);
+    state.ask_depths.reserve(num_levels);
+    for (size_t k = 0; k < num_levels; ++k) {
+        state.bid_depths.push_back(book_->bidDepthAtLevel(k));
+        state.ask_depths.push_back(book_->askDepthAtLevel(k));
+    }
     const Intensities intens = intensityModel_->compute(state);
     const double lambda_total = intens.total();
     const double dt = eventSampler_->sampleDeltaT(lambda_total);
     t_ += dt;
     if (t_ >= session_seconds_) return false;
-    const EventType type = eventSampler_->sampleType(intens);
-    const EventAttrs attrs = attributeSampler_->sample(type, *book_, state.features);
+
+    EventType type;
+    size_t level_hint = kLevelHintNone;
+    std::vector<double> per_level;
+    if (intensityModel_->getPerLevelIntensities(per_level) && !per_level.empty()) {
+        const size_t idx = eventSampler_->sampleIndexFromWeights(per_level);
+        const int K = static_cast<int>((per_level.size() - 2) / 4);
+        CurveIntensityModel::decodePerLevelIndex(idx, K, type, level_hint);
+    } else {
+        type = eventSampler_->sampleType(intens);
+    }
+    const EventAttrs attrs = attributeSampler_->sample(type, *book_, state.features, level_hint);
     SimEvent ev;
     ev.type = type;
     ev.side = attrs.side;

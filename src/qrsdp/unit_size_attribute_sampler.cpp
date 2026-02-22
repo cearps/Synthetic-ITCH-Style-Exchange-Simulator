@@ -46,27 +46,31 @@ size_t UnitSizeAttributeSampler::sampleCancelLevelIndex(bool is_bid, const IOrde
 }
 
 EventAttrs UnitSizeAttributeSampler::sample(EventType type, const IOrderBook& book,
-                                            const BookFeatures& f) {
+                                            const BookFeatures& f, size_t level_hint) {
     EventAttrs out;
     out.qty = 1;
     out.order_id = 0;
 
+    const bool use_hint = (level_hint != kLevelHintNone);
+    const size_t num_levels = book.numLevels();
+    const size_t safe_level = use_hint ? std::min(level_hint, num_levels > 0 ? num_levels - 1 : 0) : 0;
+
     switch (type) {
         case EventType::ADD_BID:
             out.side = Side::BID;
-            out.price_ticks = book.bidPriceAtLevel(sampleLevelIndex(book.numLevels()));
+            out.price_ticks = book.bidPriceAtLevel(use_hint ? safe_level : sampleLevelIndex(num_levels));
             break;
         case EventType::ADD_ASK:
             out.side = Side::ASK;
-            out.price_ticks = book.askPriceAtLevel(sampleLevelIndex(book.numLevels()));
+            out.price_ticks = book.askPriceAtLevel(use_hint ? safe_level : sampleLevelIndex(num_levels));
             break;
         case EventType::CANCEL_BID:
             out.side = Side::BID;
-            out.price_ticks = book.bidPriceAtLevel(sampleCancelLevelIndex(true, book));
+            out.price_ticks = book.bidPriceAtLevel(use_hint ? safe_level : sampleCancelLevelIndex(true, book));
             break;
         case EventType::CANCEL_ASK:
             out.side = Side::ASK;
-            out.price_ticks = book.askPriceAtLevel(sampleCancelLevelIndex(false, book));
+            out.price_ticks = book.askPriceAtLevel(use_hint ? safe_level : sampleCancelLevelIndex(false, book));
             break;
         case EventType::EXECUTE_BUY:
             out.side = Side::ASK;

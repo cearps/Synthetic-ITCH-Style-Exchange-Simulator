@@ -14,7 +14,8 @@ constexpr size_t kAttrSamplerMaxLevels = 64;
 class UnitSizeAttributeSampler : public IAttributeSampler {
 public:
     UnitSizeAttributeSampler(IRng& rng, double alpha);
-    EventAttrs sample(EventType, const IOrderBook&, const BookFeatures&) override;
+    EventAttrs sample(EventType, const IOrderBook&, const BookFeatures&,
+                     size_t level_hint = kLevelHintNone) override;
 
 private:
     IRng* rng_;

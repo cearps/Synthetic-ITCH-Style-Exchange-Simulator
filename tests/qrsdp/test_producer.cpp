@@ -3,6 +3,8 @@
 #include "qrsdp/in_memory_sink.h"
 #include "qrsdp/multi_level_book.h"
 #include "qrsdp/simple_imbalance_intensity.h"
+#include "qrsdp/hlr_params.h"
+#include "qrsdp/curve_intensity_model.h"
 #include "qrsdp/mt19937_rng.h"
 #include "qrsdp/competing_intensity_sampler.h"
 #include "qrsdp/unit_size_attribute_sampler.h"
@@ -207,6 +209,93 @@ TEST(QrsdpProducer, TraceShiftAndPrintFirst20) {
 
     std::printf("events_written=%lu close_ticks=%d shift_count=%d\n",
                 result.events_written, result.close_ticks, shift_count);
+}
+
+// --- HLR2014 Model I (curve intensity) tests ---
+TEST(QrsdpProducer, CurveModelDeterminismSameSeed) {
+    const uint64_t seed = 4242;
+    TradingSession session = makeSession(seed, 5);
+    session.levels_per_side = 3;
+
+    HLRParams p = makeDefaultHLRParams(3, 50);
+    CurveIntensityModel model(p);
+
+    Mt19937Rng rng1(seed);
+    Mt19937Rng rng2(seed);
+    MultiLevelBook book1;
+    MultiLevelBook book2;
+    CompetingIntensitySampler sampler1(rng1);
+    CompetingIntensitySampler sampler2(rng2);
+    UnitSizeAttributeSampler attr1(rng1, 0.5);
+    UnitSizeAttributeSampler attr2(rng2, 0.5);
+
+    QrsdpProducer producer1(rng1, book1, model, sampler1, attr1);
+    QrsdpProducer producer2(rng2, book2, model, sampler2, attr2);
+
+    InMemorySink sink1;
+    InMemorySink sink2;
+    SessionResult r1 = producer1.runSession(session, sink1);
+    SessionResult r2 = producer2.runSession(session, sink2);
+
+    EXPECT_EQ(sink1.size(), sink2.size());
+    EXPECT_EQ(r1.events_written, r2.events_written);
+    const size_t n = std::min(sink1.size(), sink2.size());
+    for (size_t i = 0; i < n && i < 200u; ++i) {
+        EXPECT_TRUE(eventRecordsEqual(sink1.events()[i], sink2.events()[i]))
+            << "curve model record " << i << " differs";
+    }
+}
+
+TEST(QrsdpProducer, CurveModelInvariants) {
+    const uint64_t seed = 1111;
+    TradingSession session = makeSession(seed, 3);
+    session.levels_per_side = 3;
+    session.initial_depth = 10;
+
+    HLRParams p = makeDefaultHLRParams(3, 50);
+    CurveIntensityModel model(p);
+    Mt19937Rng rng(seed);
+    MultiLevelBook book;
+    CompetingIntensitySampler eventSampler(rng);
+    UnitSizeAttributeSampler attrSampler(rng, 0.5);
+    QrsdpProducer producer(rng, book, model, eventSampler, attrSampler);
+    InMemorySink sink;
+
+    producer.runSession(session, sink);
+
+    const Level bid = book.bestBid();
+    const Level ask = book.bestAsk();
+    EXPECT_LT(bid.price_ticks, ask.price_ticks) << "best bid < best ask";
+    EXPECT_GE(ask.price_ticks - bid.price_ticks, 1) << "spread >= 1 tick";
+    for (size_t k = 0; k < book.numLevels(); ++k) {
+        EXPECT_GE(book.bidDepthAtLevel(k), 0u) << "bid depth nonneg at level " << k;
+        EXPECT_GE(book.askDepthAtLevel(k), 0u) << "ask depth nonneg at level " << k;
+    }
+}
+
+TEST(QrsdpProducer, CurveModelSmoke) {
+    const uint64_t seed = 9999;
+    TradingSession session = makeSession(seed, 2);
+    session.levels_per_side = 5;
+    session.initial_depth = 20;
+
+    HLRParams p = makeDefaultHLRParams(5, 100);
+    CurveIntensityModel model(p);
+    Mt19937Rng rng(seed);
+    MultiLevelBook book;
+    CompetingIntensitySampler eventSampler(rng);
+    UnitSizeAttributeSampler attrSampler(rng, 0.5);
+    QrsdpProducer producer(rng, book, model, eventSampler, attrSampler);
+    InMemorySink sink;
+
+    SessionResult result = producer.runSession(session, sink);
+
+    EXPECT_GT(result.events_written, 0u) << "expected events in 2 seconds";
+    EXPECT_LT(result.events_written, 50000u) << "no explosion";
+    const Level bid = book.bestBid();
+    const Level ask = book.bestAsk();
+    EXPECT_LT(bid.price_ticks, ask.price_ticks);
+    EXPECT_GE(ask.price_ticks - bid.price_ticks, 1);
 }
 
 }  // namespace test

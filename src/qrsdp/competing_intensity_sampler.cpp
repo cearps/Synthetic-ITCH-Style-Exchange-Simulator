@@ -1,6 +1,7 @@
 #include "qrsdp/competing_intensity_sampler.h"
 #include <cmath>
 #include <limits>
+#include <vector>
 
 namespace qrsdp {
 
@@ -35,6 +36,25 @@ EventType CompetingIntensitySampler::sampleType(const Intensities& intens) {
         if (u < cum / total) return t;
     }
     return EventType::EXECUTE_SELL;
+}
+
+size_t CompetingIntensitySampler::sampleIndexFromWeights(const std::vector<double>& weights) {
+    if (weights.empty()) return 0;
+    double total = 0.0;
+    for (double w : weights) {
+        if (std::isfinite(w) && w > 0.0) total += w;
+    }
+    if (total <= 0.0) return 0;
+    const double u = rng_->uniform();
+    if (u <= 0.0 || u >= 1.0) return 0;
+    double cum = 0.0;
+    for (size_t i = 0; i < weights.size(); ++i) {
+        if (std::isfinite(weights[i]) && weights[i] > 0.0) {
+            cum += weights[i];
+            if (u < cum / total) return i;
+        }
+    }
+    return weights.size() - 1;
 }
 
 }  // namespace qrsdp

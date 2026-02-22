@@ -50,6 +50,9 @@ set(STREAMING_SOURCES
 set(QRSDP_SOURCES
     src/qrsdp/multi_level_book.cpp
     src/qrsdp/simple_imbalance_intensity.cpp
+    src/qrsdp/intensity_curve.cpp
+    src/qrsdp/hlr_params.cpp
+    src/qrsdp/curve_intensity_model.cpp
     src/qrsdp/mt19937_rng.cpp
     src/qrsdp/competing_intensity_sampler.cpp
     src/qrsdp/unit_size_attribute_sampler.cpp
@@ -112,6 +115,7 @@ if(BUILD_TESTING)
         tests/qrsdp/test_interfaces.cpp
         tests/qrsdp/test_book.cpp
         tests/qrsdp/test_intensity.cpp
+        tests/qrsdp/test_curve_intensity.cpp
         tests/qrsdp/test_sampler.cpp
         tests/qrsdp/test_attribute_sampler.cpp
         tests/qrsdp/test_producer.cpp

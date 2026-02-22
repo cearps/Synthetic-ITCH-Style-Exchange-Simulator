@@ -2,6 +2,7 @@
 
 #include "qrsdp/event_types.h"
 #include <cstdint>
+#include <vector>
 
 namespace qrsdp {
 
@@ -66,8 +67,9 @@ struct BookFeatures {
 // --- Full book state (extensible for HLR per-level queues) ---
 struct BookState {
     BookFeatures features;
-    // Phase 2: optional per-level depths for queue-reactive model, e.g.:
-    // std::vector<uint32_t> bid_depths, ask_depths;
+    /// Per-level queue depths for HLR curve model. Empty = use features only (legacy).
+    std::vector<uint32_t> bid_depths;
+    std::vector<uint32_t> ask_depths;
 };
 
 // --- Intensities (6 rates for competing risks) ---

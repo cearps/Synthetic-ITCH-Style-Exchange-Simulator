@@ -12,6 +12,7 @@ public:
     explicit CompetingIntensitySampler(IRng& rng);
     double sampleDeltaT(double lambdaTotal) override;
     EventType sampleType(const Intensities&) override;
+    size_t sampleIndexFromWeights(const std::vector<double>& weights) override;
 
 private:
     IRng* rng_;
