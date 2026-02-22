@@ -1,6 +1,7 @@
 #pragma once
 
 #include "qrsdp/records.h"
+#include "qrsdp/irng.h"
 #include <cstddef>
 
 namespace qrsdp {
@@ -19,6 +20,8 @@ public:
     virtual int32_t askPriceAtLevel(size_t k) const = 0;
     virtual uint32_t bidDepthAtLevel(size_t k) const = 0;
     virtual uint32_t askDepthAtLevel(size_t k) const = 0;
+    /// HLR2014 Model III: optionally reinitialize all queue depths (e.g. from invariant). Default: no-op.
+    virtual void reinitialize(IRng& rng, double depth_mean) { (void)rng; (void)depth_mean; }
 };
 
 }  // namespace qrsdp

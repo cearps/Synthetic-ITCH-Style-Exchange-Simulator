@@ -1,4 +1,5 @@
 #include "qrsdp/multi_level_book.h"
+#include "qrsdp/irng.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -9,7 +10,24 @@ namespace {
 
 constexpr double kImbalanceEps = 1e-9;
 
+/// Simple Poisson(mean) draw; returns nonnegative integer.
+uint32_t poissonSample(IRng& rng, double mean) {
+    if (mean <= 0.0) return 0;
+    if (mean > 1e6) return static_cast<uint32_t>(mean);
+    double u = rng.uniform();
+    if (u <= 0.0 || u >= 1.0) u = 0.5;
+    double p = std::exp(-mean);
+    double s = p;
+    uint32_t k = 0;
+    while (u > s) {
+        ++k;
+        p *= mean / static_cast<double>(k);
+        s += p;
+    }
+    return k;
 }
+
+}  // namespace
 
 void MultiLevelBook::seed(const BookSeed& s) {
     num_levels_ = std::min(static_cast<size_t>(s.levels_per_side), kMaxLevels);
@@ -158,6 +176,14 @@ void MultiLevelBook::shiftAskBook() {
     }
     ask_levels_[num_levels_ - 1].price_ticks = ask_levels_[num_levels_ - 2].price_ticks + 1;
     ask_levels_[num_levels_ - 1].depth = initial_depth_;
+}
+
+void MultiLevelBook::reinitialize(IRng& rng, double depth_mean) {
+    const double mu = depth_mean > 0.0 ? depth_mean : static_cast<double>(initial_depth_);
+    for (size_t k = 0; k < num_levels_; ++k) {
+        bid_levels_[k].depth = poissonSample(rng, mu);
+        ask_levels_[k].depth = poissonSample(rng, mu);
+    }
 }
 
 int MultiLevelBook::bidIndexForPrice(int32_t price_ticks) const {

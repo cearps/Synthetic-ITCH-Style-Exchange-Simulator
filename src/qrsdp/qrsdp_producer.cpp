@@ -31,6 +31,11 @@ void QrsdpProducer::startSession(const TradingSession& session) {
     t_ = 0.0;
     order_id_ = 1;
     events_written_ = 0;
+    shift_count_ = 0;
+    theta_reinit_ = session.queue_reactive.theta_reinit;
+    reinit_mean_ = session.queue_reactive.reinit_depth_mean > 0.0
+                       ? session.queue_reactive.reinit_depth_mean
+                       : 10.0;
 }
 
 bool QrsdpProducer::stepOneEvent(IEventSink& sink) {
@@ -67,7 +72,18 @@ bool QrsdpProducer::stepOneEvent(IEventSink& sink) {
     ev.price_ticks = attrs.price_ticks;
     ev.qty = attrs.qty;
     ev.order_id = order_id_++;
+    const int32_t prev_bid = book_->bestBid().price_ticks;
+    const int32_t prev_ask = book_->bestAsk().price_ticks;
     book_->apply(ev);
+    const int32_t new_bid = book_->bestBid().price_ticks;
+    const int32_t new_ask = book_->bestAsk().price_ticks;
+    const bool shift_occurred = (new_bid != prev_bid || new_ask != prev_ask);
+    if (shift_occurred) {
+        ++shift_count_;
+        if (theta_reinit_ > 0.0 && rng_->uniform() < theta_reinit_) {
+            book_->reinitialize(*rng_, reinit_mean_);
+        }
+    }
     EventRecord rec;
     rec.ts_ns = static_cast<uint64_t>(t_ * 1e9);
     rec.type = static_cast<uint8_t>(type);

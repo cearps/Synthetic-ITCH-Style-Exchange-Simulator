@@ -1,6 +1,7 @@
 #pragma once
 
 #include "qrsdp/i_order_book.h"
+#include "qrsdp/irng.h"
 #include "qrsdp/records.h"
 #include <array>
 #include <cstddef>
@@ -22,6 +23,7 @@ public:
     int32_t askPriceAtLevel(size_t k) const override;
     uint32_t bidDepthAtLevel(size_t k) const override;
     uint32_t askDepthAtLevel(size_t k) const override;
+    void reinitialize(IRng& rng, double depth_mean) override;
 
 private:
     struct LevelSlot {

@@ -24,6 +24,7 @@ public:
     bool stepOneEvent(IEventSink& sink);
     double currentTime() const { return t_; }
     uint64_t eventsWrittenThisSession() const { return events_written_; }
+    uint64_t shiftCountThisSession() const { return shift_count_; }
 
 private:
     IRng* rng_;
@@ -35,6 +36,9 @@ private:
     double t_ = 0.0;
     uint64_t order_id_ = 1;
     uint64_t events_written_ = 0;
+    uint64_t shift_count_ = 0;
+    double theta_reinit_ = 0.0;
+    double reinit_mean_ = 10.0;
 };
 
 }  // namespace qrsdp

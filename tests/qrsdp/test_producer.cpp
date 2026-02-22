@@ -273,6 +273,54 @@ TEST(QrsdpProducer, CurveModelInvariants) {
     }
 }
 
+TEST(QrsdpProducer, QueueReactiveThetaReinitOneAlwaysReinit) {
+    TradingSession session = makeSession(5555, 15);
+    session.levels_per_side = 2;
+    session.initial_depth = 1;
+    session.intensity_params.base_M = 40.0;
+    session.intensity_params.epsilon_exec = 0.5;
+    session.queue_reactive.theta_reinit = 1.0;
+    session.queue_reactive.reinit_depth_mean = 5.0;
+
+    Mt19937Rng rng(session.seed);
+    MultiLevelBook book;
+    SimpleImbalanceIntensity model(session.intensity_params);
+    CompetingIntensitySampler eventSampler(rng);
+    UnitSizeAttributeSampler attrSampler(rng, 0.5);
+    QrsdpProducer producer(rng, book, model, eventSampler, attrSampler);
+    InMemorySink sink;
+
+    producer.runSession(session, sink);
+
+    const Level bid = book.bestBid();
+    const Level ask = book.bestAsk();
+    EXPECT_LT(bid.price_ticks, ask.price_ticks);
+    EXPECT_GE(ask.price_ticks - bid.price_ticks, 1);
+    EXPECT_GT(sink.size(), 0u);
+}
+
+TEST(QrsdpProducer, QueueReactiveThetaReinitZeroNoReinit) {
+    TradingSession session = makeSession(6666, 3);
+    session.levels_per_side = 2;
+    session.initial_depth = 1;
+    session.queue_reactive.theta_reinit = 0.0;
+
+    Mt19937Rng rng(session.seed);
+    MultiLevelBook book;
+    SimpleImbalanceIntensity model(session.intensity_params);
+    CompetingIntensitySampler eventSampler(rng);
+    UnitSizeAttributeSampler attrSampler(rng, 0.5);
+    QrsdpProducer producer(rng, book, model, eventSampler, attrSampler);
+    InMemorySink sink;
+
+    producer.runSession(session, sink);
+
+    const Level bid = book.bestBid();
+    const Level ask = book.bestAsk();
+    EXPECT_LT(bid.price_ticks, ask.price_ticks);
+    EXPECT_GE(ask.price_ticks - bid.price_ticks, 1);
+}
+
 TEST(QrsdpProducer, CurveModelSmoke) {
     const uint64_t seed = 9999;
     TradingSession session = makeSession(seed, 2);
