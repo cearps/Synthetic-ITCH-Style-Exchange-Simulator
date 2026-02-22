@@ -24,5 +24,5 @@ RUN mkdir -p build && cd build && \
     cmake --build . --config Release || (echo "Build failed, showing errors:" && cat CMakeFiles/CMakeError.log 2>/dev/null || true && exit 1)
 
 # Default command (can be overridden)
-CMD ["/app/build/itch_simulator"]
+CMD ["/app/build/qrsdp_cli"]
 

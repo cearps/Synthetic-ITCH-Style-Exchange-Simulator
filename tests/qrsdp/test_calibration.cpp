@@ -1,0 +1,40 @@
+#include <gtest/gtest.h>
+#include "calibration/intensity_estimator.h"
+#include "calibration/intensity_curve_io.h"
+#include "core/records.h"
+#include "core/event_types.h"
+#include <cstdio>
+#include <string>
+
+namespace qrsdp {
+namespace test {
+
+TEST(IntensityEstimator, LambdaTotalAndType) {
+    IntensityEstimator est;
+    est.reset();
+    est.recordSojourn(5, 0.1, EventType::ADD_BID);
+    est.recordSojourn(5, 0.2, EventType::CANCEL_BID);
+    est.recordSojourn(5, 0.3, EventType::EXECUTE_SELL);
+    const double lambda_tot = est.lambdaTotal(5);
+    EXPECT_GT(lambda_tot, 0.0);
+    EXPECT_NEAR(lambda_tot, 3.0 / 0.6, 0.01);  // 3 events, 0.6 sec total
+    const double lambda_add = est.lambdaType(5, EventType::ADD_BID);
+    EXPECT_NEAR(lambda_add, lambda_tot / 3.0, 0.01);
+}
+
+TEST(IntensityCurveIo, SaveAndLoad) {
+    IntensityCurve c;
+    c.setTable({1.0, 2.0, 3.0}, IntensityCurve::TailRule::FLAT);
+    const std::string path = "test_curve_io_tmp.json";
+    ASSERT_TRUE(saveCurveToJson(path, c));
+    IntensityCurve loaded;
+    ASSERT_TRUE(loadCurveFromJson(path, loaded));
+    EXPECT_EQ(loaded.nMax(), 2u);
+    EXPECT_DOUBLE_EQ(loaded.value(0), 1.0);
+    EXPECT_DOUBLE_EQ(loaded.value(1), 2.0);
+    EXPECT_DOUBLE_EQ(loaded.value(2), 3.0);
+    std::remove(path.c_str());
+}
+
+}  // namespace test
+}  // namespace qrsdp
