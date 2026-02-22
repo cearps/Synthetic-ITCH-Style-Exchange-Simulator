@@ -5,6 +5,8 @@
 #include "qrsdp/in_memory_sink.h"
 #include "qrsdp/multi_level_book.h"
 #include "qrsdp/simple_imbalance_intensity.h"
+#include "qrsdp/hlr_params.h"
+#include "qrsdp/curve_intensity_model.h"
 #include "qrsdp/mt19937_rng.h"
 #include "qrsdp/competing_intensity_sampler.h"
 #include "qrsdp/unit_size_attribute_sampler.h"
@@ -97,7 +99,7 @@ int main(int argc, char** argv) {
     // --- QRSDP components (owned here; producer uses refs) ---
     qrsdp::Mt19937Rng rng(12345);
     qrsdp::MultiLevelBook book;
-    qrsdp::SimpleImbalanceIntensity* intensityModel = nullptr;  // set after session params
+    qrsdp::IIntensityModel* intensityModel = nullptr;  // points to legacy or curve model
     qrsdp::CompetingIntensitySampler eventSampler(rng);
     qrsdp::UnitSizeAttributeSampler* attrSampler = nullptr;
     qrsdp::QrsdpProducer* producer = nullptr;
@@ -122,21 +124,23 @@ int main(int argc, char** argv) {
     bool ui_show_mid = true;
     bool ui_show_bid_ask = true;
     bool ui_show_shift_markers = true;
+    int ui_model = 0;  // 0 = Legacy (SimpleImbalance), 1 = HLR2014 (CurveIntensity)
+    double ui_theta_reinit = 0.0;
+    double ui_reinit_mean = 10.0;
+    int ui_curve_preset = 0;  // 0 = starter large-tick, 1 = high vol, 2 = mean-reverting (same for now)
+    int ui_nmax = 100;
 
-    // Allocate model and sampler with default params; recreated on Reset
-    qrsdp::IntensityParams defaultParams;
-    defaultParams.base_L = ui_base_L;
-    defaultParams.base_C = ui_base_C;
-    defaultParams.base_M = ui_base_M;
-    defaultParams.imbalance_sensitivity = 1.0;
-    defaultParams.cancel_sensitivity = 1.0;
-    defaultParams.epsilon_exec = ui_epsilon_exec;
-    std::unique_ptr<qrsdp::SimpleImbalanceIntensity> intensityModelPtr(
-        new qrsdp::SimpleImbalanceIntensity(defaultParams));
+    // Model instances; reset() recreates based on ui_model
+    std::unique_ptr<qrsdp::SimpleImbalanceIntensity> legacyModelPtr;
+    std::unique_ptr<qrsdp::CurveIntensityModel> curveModelPtr;
     std::unique_ptr<qrsdp::UnitSizeAttributeSampler> attrSamplerPtr(
         new qrsdp::UnitSizeAttributeSampler(rng, ui_alpha));
-    intensityModel = intensityModelPtr.get();
     attrSampler = attrSamplerPtr.get();
+    {
+        qrsdp::IntensityParams p{ui_base_L, ui_base_C, ui_base_M, 1.0, 1.0, ui_epsilon_exec};
+        legacyModelPtr = std::make_unique<qrsdp::SimpleImbalanceIntensity>(p);
+        intensityModel = legacyModelPtr.get();
+    }
     std::unique_ptr<qrsdp::QrsdpProducer> producerPtr(
         new qrsdp::QrsdpProducer(rng, book, *intensityModel, eventSampler, *attrSampler));
     producer = producerPtr.get();
@@ -172,6 +176,8 @@ int main(int argc, char** argv) {
         s.intensity_params.imbalance_sensitivity = 1.0;
         s.intensity_params.cancel_sensitivity = 1.0;
         s.intensity_params.epsilon_exec = ui_epsilon_exec;
+        s.queue_reactive.theta_reinit = static_cast<double>(ui_theta_reinit);
+        s.queue_reactive.reinit_depth_mean = ui_reinit_mean;
         return s;
     };
 
@@ -189,11 +195,21 @@ int main(int argc, char** argv) {
         depth_bid_best_history.clear();
         depth_ask_best_history.clear();
         sink.clear();
-        intensityModelPtr = std::make_unique<qrsdp::SimpleImbalanceIntensity>(qrsdp::IntensityParams{
-            ui_base_L, ui_base_C, ui_base_M, 1.0, 1.0, ui_epsilon_exec});
         attrSamplerPtr = std::make_unique<qrsdp::UnitSizeAttributeSampler>(rng, ui_alpha);
-        intensityModel = intensityModelPtr.get();
         attrSampler = attrSamplerPtr.get();
+        if (ui_model == 0) {
+            legacyModelPtr = std::make_unique<qrsdp::SimpleImbalanceIntensity>(qrsdp::IntensityParams{
+                ui_base_L, ui_base_C, ui_base_M, 1.0, 1.0, ui_epsilon_exec});
+            curveModelPtr.reset();
+            intensityModel = legacyModelPtr.get();
+        } else {
+            const int K = static_cast<int>(ui_levels_per_side);
+            const int nmax = ui_nmax > 0 ? ui_nmax : 100;
+            qrsdp::HLRParams p = qrsdp::makeDefaultHLRParams(K, nmax);
+            curveModelPtr = std::make_unique<qrsdp::CurveIntensityModel>(p);
+            legacyModelPtr.reset();
+            intensityModel = curveModelPtr.get();
+        }
         producerPtr = std::make_unique<qrsdp::QrsdpProducer>(
             rng, book, *intensityModel, eventSampler, *attrSampler);
         producer = producerPtr.get();
@@ -296,6 +312,10 @@ int main(int argc, char** argv) {
 
         // --- Controls (left) ---
         ImGui::Begin("Controls");
+        const char* model_items[] = { "Legacy (SimpleImbalance)", "HLR2014 (CurveIntensity + QueueReactive)" };
+        if (ImGui::Combo("Model", &ui_model, model_items, 2)) {
+            reset();
+        }
         ImGui::InputScalar("Seed", ImGuiDataType_U64, &ui_seed);
         {
             uint32_t session_min = 5, session_max = 3600;
@@ -313,8 +333,19 @@ int main(int argc, char** argv) {
         ImGui::InputScalar("Tick size", ImGuiDataType_U32, &ui_tick_size);
         ImGui::InputScalar("Initial depth", ImGuiDataType_U32, &ui_initial_depth);
         ImGui::InputScalar("Initial spread ticks", ImGuiDataType_U32, &ui_initial_spread_ticks);
+        if (ui_model == 1) {
+            ImGui::Separator();
+            ImGui::Text("Queue-reactive (HLR2014 Model III)");
+            ImGui::SliderScalar("theta_reinit", ImGuiDataType_Double, &ui_theta_reinit, 0.0, 1.0, "%.2f");
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Prob to reinitialize book after a shift (Poisson depths)");
+            ImGui::InputDouble("reinit_depth_mean", &ui_reinit_mean, 1.0, 0, "%.1f");
+            const char* preset_items[] = { "Starter large-tick", "High volatility", "Mean-reverting" };
+            ImGui::Combo("Curve preset", &ui_curve_preset, preset_items, 3);
+            ImGui::InputInt("Nmax (curves)", &ui_nmax); if (ui_nmax < 1) ui_nmax = 1; if (ui_nmax > 500) ui_nmax = 500;
+        }
         ImGui::Separator();
-        ImGui::Text("Intensity");
+        ImGui::Text("Intensity (Legacy)");
         ImGui::InputDouble("base_L", &ui_base_L, 1.0, 0, "%.2f");
         ImGui::InputDouble("base_M", &ui_base_M, 1.0, 0, "%.2f");
         ImGui::InputDouble("base_C", &ui_base_C, 0.01, 0, "%.3f");
@@ -356,6 +387,13 @@ int main(int argc, char** argv) {
         qrsdp::Level ask = book.bestAsk();
         qrsdp::BookState state;
         state.features = book.features();
+        const size_t num_levels = book.numLevels();
+        state.bid_depths.clear();
+        state.ask_depths.clear();
+        for (size_t k = 0; k < num_levels; ++k) {
+            state.bid_depths.push_back(book.bidDepthAtLevel(k));
+            state.ask_depths.push_back(book.askDepthAtLevel(k));
+        }
         const qrsdp::BookFeatures& f = state.features;
         ImGui::Text("t = %.3f s   event_count = %lu", producer->currentTime(), (unsigned long)event_count);
         ImGui::Text("best_bid = %d   best_ask = %d   spread = %d", bid.price_ticks, ask.price_ticks, f.spread_ticks);
@@ -365,19 +403,18 @@ int main(int argc, char** argv) {
         // Real-time intensities (exact producer logic via same model)
         {
             qrsdp::Intensities intens = intensityModel->compute(state);
-            ImGui::Text("lambda_add_bid   = %.4f   lambda_add_ask   = %.4f", intens.add_bid, intens.add_ask);
-            ImGui::Text("lambda_exec_buy  = %.4f   lambda_exec_sell = %.4f", intens.exec_buy, intens.exec_sell);
-            ImGui::Text("lambda_cancel_bid= %.4f   lambda_cancel_ask= %.4f", intens.cancel_bid, intens.cancel_ask);
-            ImGui::Text("lambda_total     = %.4f", intens.total());
+            ImGui::Text("lambda_total (Lambda) = %.4f", intens.total());
+            ImGui::Text("add_bid=%.3f add_ask=%.3f cancel_bid=%.3f cancel_ask=%.3f exec_buy=%.3f exec_sell=%.3f",
+                        intens.add_bid, intens.add_ask, intens.cancel_bid, intens.cancel_ask, intens.exec_buy, intens.exec_sell);
             const double net_bid_drift = intens.exec_sell + intens.cancel_bid - intens.add_bid;
             const double net_ask_drift = intens.exec_buy + intens.cancel_ask - intens.add_ask;
-            ImGui::Text("net_bid_drift = %.4f   net_ask_drift = %.4f", net_bid_drift, net_ask_drift);
+            ImGui::Text("drift at best: bid=%.4f ask=%.4f", net_bid_drift, net_ask_drift);
             const double exec_total = intens.exec_buy + intens.exec_sell;
-            if (exec_total < 0.01) {
+            if (exec_total < 0.01 && ui_model == 0) {
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0.5f, 0, 1));
                 ImGui::Text("No execute intensity: set base_M > 0 and epsilon_exec > 0, then Reset");
                 ImGui::PopStyleColor();
-            } else if (net_bid_drift < 0.0 && net_ask_drift < 0.0) {
+            } else if (net_bid_drift < 0.0 && net_ask_drift < 0.0 && ui_model == 0) {
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
                 ImGui::Text("Depth accumulating regime -- shifts unlikely");
                 ImGui::PopStyleColor();
@@ -388,7 +425,9 @@ int main(int argc, char** argv) {
                     (unsigned long)count_add_bid, (unsigned long)count_add_ask,
                     (unsigned long)count_cancel_bid, (unsigned long)count_cancel_ask,
                     (unsigned long)count_exec_buy, (unsigned long)count_exec_sell);
-        ImGui::Text("Shifts: up=%lu down=%lu total=%lu", (unsigned long)up_shifts, (unsigned long)down_shifts, (unsigned long)(up_shifts + down_shifts));
+        ImGui::Text("Shifts: up=%lu down=%lu total=%lu (producer shift_count=%lu)",
+                    (unsigned long)up_shifts, (unsigned long)down_shifts, (unsigned long)(up_shifts + down_shifts),
+                    (unsigned long)producer->shiftCountThisSession());
         ImGui::Text("Last shift: t=%.3f bid=%d ask=%d", last_shift_t, last_shift_bid, last_shift_ask);
         if (!invariants_ok && invariant_msg[0]) {
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0.2f, 0.2f, 1));
