@@ -6,6 +6,7 @@ This folder contains project documentation for both humans and AI coding agents.
 
 - [Project goal](project-goal.md)
 - [Build, test, and run](build-test-run.md)
+- [Dev week plan](dev-week-plan.md) — 5-day plan for event log persistence, replay, and Jupyter visualisation
 
 ## QRSDP Producer
 
