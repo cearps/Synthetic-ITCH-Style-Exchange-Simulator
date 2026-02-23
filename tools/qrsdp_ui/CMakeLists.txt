@@ -56,6 +56,8 @@ target_link_libraries(implot PUBLIC imgui)
 
 # --- qrsdp_ui executable ---
 add_executable(qrsdp_ui main.cpp)
+target_compile_options(qrsdp_ui PRIVATE ${PROJECT_WARNING_FLAGS})
+target_compile_definitions(qrsdp_ui PRIVATE GL_SILENCE_DEPRECATION)
 target_include_directories(qrsdp_ui PRIVATE ${CMAKE_SOURCE_DIR}/src ${imgui_SOURCE_DIR} ${implot_SOURCE_DIR})
 target_link_libraries(qrsdp_ui PRIVATE simulator_lib implot glfw)
 if(WIN32)

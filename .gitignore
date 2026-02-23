@@ -37,3 +37,4 @@ Testing/
 docker-data/
 
 venv/
+output/

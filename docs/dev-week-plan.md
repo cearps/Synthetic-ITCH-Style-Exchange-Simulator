@@ -60,7 +60,7 @@ From the proposal, scoped to what is achievable and useful:
    - FetchContent or vendored `lz4.h` / `lz4.c` (BSD licence, single-file)
    - Wire into CMakeLists.txt
 
-3. **Implement `BinaryFileSink : IEventSink`** (`src/io/binary_file_sink.h/.cpp`)
+	1. **Implement `BinaryFileSink : IEventSink`** (`src/io/binary_file_sink.h/.cpp`)
    - Accumulates records into a chunk buffer (e.g. 4096 records per chunk)
    - On flush: LZ4-compress the buffer, write chunk header + compressed bytes
    - Flush on chunk full, session end, or explicit call

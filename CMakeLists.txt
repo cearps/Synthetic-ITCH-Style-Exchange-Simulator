@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
-project(qrsdp_simulator VERSION 0.2.0 LANGUAGES CXX)
+project(qrsdp_simulator VERSION 0.2.0 LANGUAGES CXX C)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -10,15 +11,23 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)
 endif()
 
-# Compiler warnings
+# Compiler warnings — applied per-target to avoid polluting third-party deps
 if(MSVC)
-    add_compile_options(/W4 /WX)
+    set(PROJECT_WARNING_FLAGS /W4 /WX)
 else()
-    add_compile_options(-Wall -Wextra -Wpedantic -Werror)
+    set(PROJECT_WARNING_FLAGS -Wall -Wextra -Wpedantic -Werror)
 endif()
 
 # Include directories
 include_directories(src)
+
+# --- Third-party: LZ4 (vendored, BSD licence) ---
+add_library(lz4 STATIC third_party/lz4/lz4.c)
+target_include_directories(lz4 PUBLIC third_party/lz4)
+set_target_properties(lz4 PROPERTIES
+    C_STANDARD 99
+    POSITION_INDEPENDENT_CODE ON
+)
 
 # Source files — organised by subdirectory
 set(BOOK_SOURCES      src/book/multi_level_book.cpp)
@@ -37,7 +46,10 @@ set(SAMPLER_SOURCES
     src/sampler/unit_size_attribute_sampler.cpp
 )
 set(RNG_SOURCES       src/rng/mt19937_rng.cpp)
-set(IO_SOURCES        src/io/in_memory_sink.cpp)
+set(IO_SOURCES
+    src/io/in_memory_sink.cpp
+    src/io/binary_file_sink.cpp
+)
 set(PRODUCER_SOURCES  src/producer/qrsdp_producer.cpp)
 
 set(LIBRARY_SOURCES
@@ -52,9 +64,12 @@ set(LIBRARY_SOURCES
 
 # Static library shared by CLI, tests, and UI
 add_library(simulator_lib STATIC ${LIBRARY_SOURCES})
+target_compile_options(simulator_lib PRIVATE ${PROJECT_WARNING_FLAGS})
+target_link_libraries(simulator_lib PUBLIC lz4)
 
 # Headless CLI executable
 add_executable(qrsdp_cli src/main.cpp)
+target_compile_options(qrsdp_cli PRIVATE ${PROJECT_WARNING_FLAGS})
 target_link_libraries(qrsdp_cli PRIVATE simulator_lib)
 
 # Google Test setup
@@ -80,10 +95,12 @@ if(BUILD_TESTING)
         tests/qrsdp/test_sampler.cpp
         tests/qrsdp/test_attribute_sampler.cpp
         tests/qrsdp/test_producer.cpp
+        tests/qrsdp/test_binary_file_sink.cpp
     )
 
     if(TEST_SOURCES)
         add_executable(tests ${TEST_SOURCES})
+        target_compile_options(tests PRIVATE ${PROJECT_WARNING_FLAGS})
         target_link_libraries(tests PRIVATE simulator_lib gtest_main)
         include(GoogleTest)
         gtest_discover_tests(tests)
