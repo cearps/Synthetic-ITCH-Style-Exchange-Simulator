@@ -51,7 +51,10 @@ set(IO_SOURCES
     src/io/binary_file_sink.cpp
     src/io/event_log_reader.cpp
 )
-set(PRODUCER_SOURCES  src/producer/qrsdp_producer.cpp)
+set(PRODUCER_SOURCES
+    src/producer/qrsdp_producer.cpp
+    src/producer/session_runner.cpp
+)
 
 set(LIBRARY_SOURCES
     ${BOOK_SOURCES}
@@ -78,6 +81,11 @@ add_executable(qrsdp_log_info src/log_info_main.cpp)
 target_compile_options(qrsdp_log_info PRIVATE ${PROJECT_WARNING_FLAGS})
 target_link_libraries(qrsdp_log_info PRIVATE simulator_lib)
 
+# Multi-day session runner
+add_executable(qrsdp_run src/run_main.cpp)
+target_compile_options(qrsdp_run PRIVATE ${PROJECT_WARNING_FLAGS})
+target_link_libraries(qrsdp_run PRIVATE simulator_lib)
+
 # Google Test setup
 option(BUILD_TESTING "Enable testing" ON)
 if(BUILD_TESTING)
@@ -103,6 +111,7 @@ if(BUILD_TESTING)
         tests/qrsdp/test_producer.cpp
         tests/qrsdp/test_binary_file_sink.cpp
         tests/qrsdp/test_event_log_reader.cpp
+        tests/qrsdp/test_session_runner.cpp
     )
 
     if(TEST_SOURCES)
@@ -123,11 +132,13 @@ endif()
 # Platform-specific libraries
 if(WIN32)
     target_link_libraries(qrsdp_cli PRIVATE ws2_32)
+    target_link_libraries(qrsdp_run PRIVATE ws2_32)
     if(BUILD_TESTING AND TEST_SOURCES)
         target_link_libraries(tests PRIVATE ws2_32)
     endif()
 else()
     target_link_libraries(qrsdp_cli PRIVATE pthread)
+    target_link_libraries(qrsdp_run PRIVATE pthread)
     if(BUILD_TESTING AND TEST_SOURCES)
         target_link_libraries(tests PRIVATE pthread)
     endif()

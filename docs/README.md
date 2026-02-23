@@ -5,7 +5,9 @@ This folder contains project documentation for both humans and AI coding agents.
 ## Project
 
 - [Project goal](project-goal.md)
-- [Build, test, and run](build-test-run.md)
+- [Build, test, and run](build-test-run.md) — how to build all targets and run each CLI tool
+- [Event log format](event-log-format.md) — binary `.qrsdp` file format specification
+- [Chunk size tuning](chunk-size-tuning.md) — compression vs granularity tradeoff analysis
 - [Dev week plan](dev-week-plan.md) — 5-day plan for event log persistence, replay, and Jupyter visualisation
 
 ## QRSDP Producer

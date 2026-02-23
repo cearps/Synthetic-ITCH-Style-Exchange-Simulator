@@ -31,10 +31,10 @@ src/
   model/         Intensity models (SimpleImbalance, CurveIntensity, HLR params)
   calibration/   Intensity estimation and curve I/O
   sampler/       Event sampler + attribute sampler
-  io/            Event sink interface + in-memory sink
-  producer/      Producer interface + QRSDP session runner
+  io/            Event sinks (in-memory, binary file), log reader, format spec
+  producer/      Producer interface, QRSDP producer, session runner
 
-tests/qrsdp/    Google Test suite (50 tests)
+tests/qrsdp/    Google Test suite (87 tests)
 tools/qrsdp_ui/  ImGui + ImPlot real-time debugging UI
 docs/            Project docs, model reviews, audit reports
 ```
@@ -62,23 +62,34 @@ docker-compose -f docker/docker-compose.yml run --rm test
 
 | Target | Description |
 |---|---|
-| `qrsdp_cli` | Headless CLI — runs a single session, prints summary |
+| `qrsdp_cli` | Single-session CLI — runs one session, optionally writes a `.qrsdp` log |
+| `qrsdp_run` | Multi-day session runner — generates datasets with continuous price chaining |
+| `qrsdp_log_info` | Log inspector — prints header, stats, and sample records from a `.qrsdp` file |
 | `qrsdp_ui` | Real-time debugging UI (ImGui/ImPlot/GLFW) |
-| `tests` | Google Test suite |
+| `tests` | Google Test suite (87 tests) |
 
 ---
 
 ## Quick Start
 
 ```bash
-# Run a 30-second session with seed 42
-./build/Release/qrsdp_cli 42 30
+# Run a single 30-second session
+./build/qrsdp_cli 42 30
+
+# Write a single-day event log
+./build/qrsdp_cli 42 23400 output/day1.qrsdp
+
+# Generate 5 trading days (6.5 hours each)
+./build/qrsdp_run --seed 42 --days 5
+
+# Inspect a log file
+./build/qrsdp_log_info output/run_42/2026-01-02.qrsdp
 
 # Launch the debugging UI
-./build/tools/qrsdp_ui/Release/qrsdp_ui
+./build/tools/qrsdp_ui/qrsdp_ui
 
 # Run tests
-./build/Release/tests
+./build/tests
 ```
 
 ---
@@ -86,7 +97,8 @@ docker-compose -f docker/docker-compose.yml run --rm test
 ## Documentation
 
 - [Documentation Index](docs/README.md)
-- [Build, Test, and Run](docs/build-test-run.md)
+- [Build, Test, and Run](docs/build-test-run.md) -- CLI usage for all tools
+- [Event Log Format](docs/event-log-format.md) -- binary `.qrsdp` file spec
 - [QRSDP Mechanics](docs/producer/QRSDP_MECHANICS.md)
 - [Model Math & Code Review](docs/06_model_math_and_code_review.md)
 - [SimpleImbalance Audit](docs/07_simple_imbalance_nonsense_audit.md)
@@ -95,7 +107,7 @@ docker-compose -f docker/docker-compose.yml run --rm test
 
 ## Project Status
 
-The QRSDP producer is functional with two intensity models, a real-time debugging UI, and a comprehensive test suite. Next milestone: event log persistence and replay (dev week).
+The QRSDP producer is functional with two intensity models, a real-time debugging UI, chunked LZ4-compressed binary event logs, a multi-day session runner, and a comprehensive test suite. Next milestone: Python reader and analysis notebooks.
 
 ---
 
