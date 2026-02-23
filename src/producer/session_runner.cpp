@@ -14,6 +14,7 @@
 #include <ctime>
 #include <filesystem>
 #include <stdexcept>
+#include <thread>
 
 namespace qrsdp {
 
@@ -71,28 +72,65 @@ void SessionRunner::writeManifest(const RunConfig& config, const RunResult& resu
     std::FILE* f = std::fopen(path.c_str(), "w");
     if (!f) throw std::runtime_error("cannot open manifest: " + path);
 
+    const bool multi = !config.securities.empty();
+
     std::fprintf(f, "{\n");
-    std::fprintf(f, "  \"format_version\": \"1.0\",\n");
+    std::fprintf(f, "  \"format_version\": \"%s\",\n", multi ? "1.1" : "1.0");
     std::fprintf(f, "  \"run_id\": \"%s\",\n", config.run_id.c_str());
     std::fprintf(f, "  \"producer\": \"qrsdp\",\n");
     std::fprintf(f, "  \"base_seed\": %llu,\n", (unsigned long long)config.base_seed);
     std::fprintf(f, "  \"seed_strategy\": \"sequential\",\n");
-    std::fprintf(f, "  \"tick_size\": %u,\n", config.tick_size);
-    std::fprintf(f, "  \"p0_ticks\": %d,\n", config.p0_ticks);
     std::fprintf(f, "  \"session_seconds\": %u,\n", config.session_seconds);
-    std::fprintf(f, "  \"levels_per_side\": %u,\n", config.levels_per_side);
-    std::fprintf(f, "  \"initial_spread_ticks\": %u,\n", config.initial_spread_ticks);
-    std::fprintf(f, "  \"initial_depth\": %u,\n", config.initial_depth);
-    std::fprintf(f, "  \"sessions\": [\n");
-    for (size_t i = 0; i < result.days.size(); ++i) {
-        const auto& d = result.days[i];
-        std::fprintf(f, "    { \"date\": \"%s\", \"seed\": %llu, \"file\": \"%s\" }%s\n",
-                     d.date.c_str(),
-                     (unsigned long long)d.seed,
-                     d.filename.c_str(),
-                     (i + 1 < result.days.size()) ? "," : "");
+
+    if (multi) {
+        std::fprintf(f, "  \"securities\": [\n");
+        for (size_t si = 0; si < config.securities.size(); ++si) {
+            const auto& sec = config.securities[si];
+            std::fprintf(f, "    {\n");
+            std::fprintf(f, "      \"symbol\": \"%s\",\n", sec.symbol.c_str());
+            std::fprintf(f, "      \"p0_ticks\": %d,\n", sec.p0_ticks);
+            std::fprintf(f, "      \"tick_size\": %u,\n", sec.tick_size);
+            std::fprintf(f, "      \"levels_per_side\": %u,\n", sec.levels_per_side);
+            std::fprintf(f, "      \"initial_spread_ticks\": %u,\n", sec.initial_spread_ticks);
+            std::fprintf(f, "      \"initial_depth\": %u,\n", sec.initial_depth);
+            std::fprintf(f, "      \"sessions\": [\n");
+
+            size_t count = 0;
+            for (const auto& d : result.days) {
+                if (d.symbol == sec.symbol) ++count;
+            }
+            size_t idx = 0;
+            for (const auto& d : result.days) {
+                if (d.symbol != sec.symbol) continue;
+                ++idx;
+                std::fprintf(f, "        { \"date\": \"%s\", \"seed\": %llu, \"file\": \"%s\" }%s\n",
+                             d.date.c_str(),
+                             (unsigned long long)d.seed,
+                             d.filename.c_str(),
+                             (idx < count) ? "," : "");
+            }
+            std::fprintf(f, "      ]\n");
+            std::fprintf(f, "    }%s\n", (si + 1 < config.securities.size()) ? "," : "");
+        }
+        std::fprintf(f, "  ]\n");
+    } else {
+        std::fprintf(f, "  \"tick_size\": %u,\n", config.tick_size);
+        std::fprintf(f, "  \"p0_ticks\": %d,\n", config.p0_ticks);
+        std::fprintf(f, "  \"levels_per_side\": %u,\n", config.levels_per_side);
+        std::fprintf(f, "  \"initial_spread_ticks\": %u,\n", config.initial_spread_ticks);
+        std::fprintf(f, "  \"initial_depth\": %u,\n", config.initial_depth);
+        std::fprintf(f, "  \"sessions\": [\n");
+        for (size_t i = 0; i < result.days.size(); ++i) {
+            const auto& d = result.days[i];
+            std::fprintf(f, "    { \"date\": \"%s\", \"seed\": %llu, \"file\": \"%s\" }%s\n",
+                         d.date.c_str(),
+                         (unsigned long long)d.seed,
+                         d.filename.c_str(),
+                         (i + 1 < result.days.size()) ? "," : "");
+        }
+        std::fprintf(f, "  ]\n");
     }
-    std::fprintf(f, "  ]\n");
+
     std::fprintf(f, "}\n");
     std::fclose(f);
 }
@@ -193,16 +231,34 @@ void SessionRunner::writePerformanceResults(const RunConfig& config,
 }
 
 // ---------------------------------------------------------------------------
-// Main run loop
+// Per-security day loop (runs on its own thread for multi-security mode)
 // ---------------------------------------------------------------------------
 
-RunResult SessionRunner::run(const RunConfig& config) {
-    namespace fs = std::filesystem;
-    fs::create_directories(config.output_dir);
+static constexpr uint64_t kSeedStride = 1024;
 
-    Mt19937Rng rng(config.base_seed);
+static std::vector<DayResult> runSecurityDays(
+    const RunConfig& config,
+    const std::string& symbol,
+    int32_t  p0_ticks,
+    uint32_t tick_size,
+    uint32_t levels_per_side,
+    uint32_t initial_spread_ticks,
+    uint32_t initial_depth,
+    const IntensityParams& intensity_params,
+    const QueueReactiveParams& queue_reactive,
+    uint64_t seed_offset)
+{
+    namespace fs = std::filesystem;
+
+    const std::string sub_dir = symbol.empty()
+        ? config.output_dir
+        : (fs::path(config.output_dir) / symbol).string();
+    fs::create_directories(sub_dir);
+
+    const uint64_t base = config.base_seed + seed_offset;
+    Mt19937Rng rng(base);
     MultiLevelBook book;
-    SimpleImbalanceIntensity model(config.intensity_params);
+    SimpleImbalanceIntensity model(intensity_params);
     CompetingIntensitySampler sampler(rng);
     UnitSizeAttributeSampler attrs(rng, 0.5);
     QrsdpProducer producer(rng, book, model, sampler, attrs);
@@ -210,30 +266,28 @@ RunResult SessionRunner::run(const RunConfig& config) {
     const uint32_t chunk_cap = config.chunk_capacity > 0
         ? config.chunk_capacity : kDefaultChunkCapacity;
 
-    RunResult result{};
-    result.total_events = 0;
-
+    std::vector<DayResult> days;
     Date current_date = parseDate(config.start_date);
-    int32_t next_p0 = config.p0_ticks;
-
-    auto run_start = std::chrono::steady_clock::now();
+    int32_t next_p0 = p0_ticks;
 
     for (uint32_t day_idx = 0; day_idx < config.num_days; ++day_idx) {
-        const uint64_t day_seed = config.base_seed + day_idx;
+        const uint64_t day_seed = base + day_idx;
         const std::string date_str = formatDate(current_date);
-        const std::string filename = date_str + ".qrsdp";
+        const std::string filename = symbol.empty()
+            ? (date_str + ".qrsdp")
+            : (symbol + "/" + date_str + ".qrsdp");
         const std::string filepath = (fs::path(config.output_dir) / filename).string();
 
         TradingSession session{};
         session.seed = day_seed;
         session.p0_ticks = next_p0;
         session.session_seconds = config.session_seconds;
-        session.levels_per_side = config.levels_per_side;
-        session.tick_size = config.tick_size;
-        session.initial_spread_ticks = config.initial_spread_ticks;
-        session.initial_depth = config.initial_depth;
-        session.intensity_params = config.intensity_params;
-        session.queue_reactive = config.queue_reactive;
+        session.levels_per_side = levels_per_side;
+        session.tick_size = tick_size;
+        session.initial_spread_ticks = initial_spread_ticks;
+        session.initial_depth = initial_depth;
+        session.intensity_params = intensity_params;
+        session.queue_reactive = queue_reactive;
 
         BinaryFileSink sink(filepath, session, chunk_cap);
 
@@ -246,12 +300,10 @@ RunResult SessionRunner::run(const RunConfig& config) {
         const double write_secs = std::chrono::duration<double>(t1 - t0).count();
         const uint64_t file_size = static_cast<uint64_t>(fs::file_size(filepath));
 
-        // Read-back benchmark: sequential scan of entire file
         auto r0 = std::chrono::steady_clock::now();
         {
             EventLogReader reader(filepath);
             auto records = reader.readAll();
-            // Force the compiler not to optimise away the read
             if (records.size() != sr.events_written) {
                 throw std::runtime_error("read-back count mismatch");
             }
@@ -260,6 +312,7 @@ RunResult SessionRunner::run(const RunConfig& config) {
         const double read_secs = std::chrono::duration<double>(r1 - r0).count();
 
         DayResult dr{};
+        dr.symbol = symbol;
         dr.date = date_str;
         dr.filename = filename;
         dr.seed = day_seed;
@@ -271,11 +324,74 @@ RunResult SessionRunner::run(const RunConfig& config) {
         dr.write_seconds = write_secs;
         dr.read_seconds = read_secs;
 
-        result.days.push_back(dr);
-        result.total_events += sr.events_written;
+        days.push_back(dr);
 
         next_p0 = sr.close_ticks;
         current_date = nextBusinessDay(current_date);
+    }
+
+    return days;
+}
+
+// ---------------------------------------------------------------------------
+// Main run loop
+// ---------------------------------------------------------------------------
+
+RunResult SessionRunner::run(const RunConfig& config) {
+    namespace fs = std::filesystem;
+    fs::create_directories(config.output_dir);
+
+    RunResult result{};
+    result.total_events = 0;
+
+    auto run_start = std::chrono::steady_clock::now();
+
+    if (config.securities.empty()) {
+        // Single-security backward-compatible path
+        auto days = runSecurityDays(
+            config, "",
+            config.p0_ticks, config.tick_size, config.levels_per_side,
+            config.initial_spread_ticks, config.initial_depth,
+            config.intensity_params, config.queue_reactive,
+            0);
+        for (auto& d : days) {
+            result.total_events += d.events_written;
+            result.days.push_back(std::move(d));
+        }
+    } else {
+        // Multi-security: one thread per security
+        std::vector<std::thread> threads;
+        std::vector<std::vector<DayResult>> per_sec_results(config.securities.size());
+        std::vector<std::string> errors(config.securities.size());
+
+        for (size_t si = 0; si < config.securities.size(); ++si) {
+            threads.emplace_back([&, si]() {
+                try {
+                    const auto& sec = config.securities[si];
+                    per_sec_results[si] = runSecurityDays(
+                        config, sec.symbol,
+                        sec.p0_ticks, sec.tick_size, sec.levels_per_side,
+                        sec.initial_spread_ticks, sec.initial_depth,
+                        sec.intensity_params, sec.queue_reactive,
+                        si * kSeedStride);
+                } catch (const std::exception& e) {
+                    errors[si] = e.what();
+                }
+            });
+        }
+
+        for (auto& t : threads) t.join();
+
+        for (size_t si = 0; si < config.securities.size(); ++si) {
+            if (!errors[si].empty()) {
+                throw std::runtime_error("security " + config.securities[si].symbol +
+                                         " failed: " + errors[si]);
+            }
+            for (auto& d : per_sec_results[si]) {
+                result.total_events += d.events_written;
+                result.days.push_back(std::move(d));
+            }
+        }
     }
 
     auto run_end = std::chrono::steady_clock::now();

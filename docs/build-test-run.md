@@ -21,7 +21,7 @@ Optional:
 | `qrsdp_cli` | Single-session CLI (quick runs, debugging) | always built |
 | `qrsdp_run` | Multi-day session runner (generates datasets) | always built |
 | `qrsdp_log_info` | Log file inspector (prints header, stats, samples) | always built |
-| `tests` | Google Test suite (87 cases) | `BUILD_TESTING=ON` (default) |
+| `tests` | Google Test suite (91 cases) | `BUILD_TESTING=ON` (default) |
 | `qrsdp_ui` | ImGui real-time debugging UI | `BUILD_QRSDP_UI=ON` (default) |
 
 ---
@@ -185,6 +185,7 @@ Usage: qrsdp_run [options]
   --perf-doc <path>   Write performance doc (default: <output>/performance-results.md)
   --depth <n>         Initial depth per level (default: 5)
   --levels <n>        Levels per side (default: 5)
+  --securities <spec> Comma-separated symbol:p0 pairs (e.g. AAPL:10000,MSFT:15000)
   --help              Show this help
 ```
 
@@ -197,9 +198,12 @@ Usage: qrsdp_run [options]
 
 # Short test run (30 seconds per day, 2 days)
 ./build/qrsdp_run --seed 42 --days 2 --seconds 30
+
+# Multi-security run (each symbol runs in parallel on its own thread)
+./build/qrsdp_run --seed 42 --days 5 --securities "AAPL:10000,MSFT:15000,GOOG:20000"
 ```
 
-Example output:
+Example output (single-security):
 
 ```
 === qrsdp_run ===
@@ -215,7 +219,7 @@ Wrote output/run_42/performance-results.md
 Wrote output/run_42/manifest.json
 ```
 
-Output directory structure:
+Output directory structure (single-security):
 
 ```
 output/run_42/
@@ -227,6 +231,29 @@ output/run_42/
   2026-01-07.qrsdp
   2026-01-08.qrsdp
 ```
+
+#### Multi-Security Mode
+
+When `--securities` is provided, each symbol gets its own subdirectory and runs on an independent thread with its own RNG, order book, and intensity model. Seeds are derived as `base_seed + security_index * 1024 + day_index`, ensuring full independence between securities.
+
+Output directory structure (multi-security):
+
+```
+output/run_42/
+  manifest.json
+  performance-results.md
+  AAPL/
+    2026-01-02.qrsdp
+    2026-01-05.qrsdp
+  MSFT/
+    2026-01-02.qrsdp
+    2026-01-05.qrsdp
+  GOOG/
+    2026-01-02.qrsdp
+    2026-01-05.qrsdp
+```
+
+The manifest format upgrades from v1.0 (flat `sessions[]`) to v1.1 (nested `securities[].sessions[]`). The Python reader auto-detects the version and provides `iter_securities()` and symbol-filtered `iter_days()` for multi-security runs.
 
 ### Log Inspector — `qrsdp_log_info`
 
@@ -334,7 +361,7 @@ jupyter notebook
 
 | Module | Description |
 |---|---|
-| `qrsdp_reader.py` | Binary `.qrsdp` reader: header parsing, LZ4 chunk decompression, manifest iteration |
+| `qrsdp_reader.py` | Binary `.qrsdp` reader: header parsing, LZ4 chunk decompression, manifest iteration (v1.0 + v1.1 multi-security) |
 | `book_replay.py` | Minimal order book replay matching C++ shift mechanics, produces mid-price/spread time series |
 | `ohlc.py` | Multi-resolution OHLC bar computation (1s, 10s, 1min, 5min) with zoom-level resolution selector |
 
@@ -362,7 +389,7 @@ src/
 third_party/
   lz4/           Vendored LZ4 compression (BSD licence)
 
-tests/qrsdp/    12 test files, 87 test cases
+tests/qrsdp/    12 test files, 91 test cases
 tools/qrsdp_ui/  ImGui + ImPlot real-time debugging UI
 ```
 
@@ -379,4 +406,4 @@ tools/qrsdp_ui/  ImGui + ImPlot real-time debugging UI
 - **Producer** — determinism, invariants, shift detection, reinit
 - **BinaryFileSink** — header, chunked writes, round-trip, index footer
 - **EventLogReader** — header parsing, chunk reads, range queries, scan fallback
-- **SessionRunner** — single-day, continuous chaining, seed strategy, business dates, manifest
+- **SessionRunner** — single-day, continuous chaining, seed strategy, business dates, manifest, multi-security run, seed independence, multi-security manifest, single-security backward compat

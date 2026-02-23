@@ -220,5 +220,126 @@ TEST_F(SessionRunnerTest, PerformanceResultsDoc) {
     EXPECT_NE(content.find("2026-01-02"), std::string::npos);
 }
 
+// ----- Multi-security tests -----
+
+static RunConfig makeMultiSecConfig(const std::string& dir, uint32_t num_days) {
+    RunConfig c = makeTestConfig(dir, num_days);
+    SecurityConfig sec_a{};
+    sec_a.symbol = "AAA";
+    sec_a.p0_ticks = 10000;
+    sec_a.tick_size = c.tick_size;
+    sec_a.levels_per_side = c.levels_per_side;
+    sec_a.initial_spread_ticks = c.initial_spread_ticks;
+    sec_a.initial_depth = c.initial_depth;
+    sec_a.intensity_params = c.intensity_params;
+    sec_a.queue_reactive = c.queue_reactive;
+
+    SecurityConfig sec_b{};
+    sec_b.symbol = "BBB";
+    sec_b.p0_ticks = 20000;
+    sec_b.tick_size = c.tick_size;
+    sec_b.levels_per_side = c.levels_per_side;
+    sec_b.initial_spread_ticks = c.initial_spread_ticks;
+    sec_b.initial_depth = c.initial_depth;
+    sec_b.intensity_params = c.intensity_params;
+    sec_b.queue_reactive = c.queue_reactive;
+
+    c.securities = {sec_a, sec_b};
+    return c;
+}
+
+TEST_F(SessionRunnerTest, MultiSecurityRun) {
+    RunConfig config = makeMultiSecConfig(dir_, 2);
+    SessionRunner runner;
+    RunResult result = runner.run(config);
+
+    // 2 securities * 2 days = 4 DayResult entries
+    ASSERT_EQ(result.days.size(), 4u);
+
+    // Separate subdirectories exist
+    EXPECT_TRUE(fs::is_directory(fs::path(dir_) / "AAA"));
+    EXPECT_TRUE(fs::is_directory(fs::path(dir_) / "BBB"));
+
+    // All files present
+    for (const auto& d : result.days) {
+        EXPECT_TRUE(fs::exists(fs::path(dir_) / d.filename))
+            << "Missing file: " << d.filename;
+    }
+
+    // Price chaining within each security
+    int aaa_idx = -1;
+    int bbb_idx = -1;
+    for (size_t i = 0; i < result.days.size(); ++i) {
+        if (result.days[i].symbol == "AAA") {
+            if (aaa_idx >= 0)
+                EXPECT_EQ(result.days[i].open_ticks, result.days[aaa_idx].close_ticks);
+            aaa_idx = static_cast<int>(i);
+        }
+        if (result.days[i].symbol == "BBB") {
+            if (bbb_idx >= 0)
+                EXPECT_EQ(result.days[i].open_ticks, result.days[bbb_idx].close_ticks);
+            bbb_idx = static_cast<int>(i);
+        }
+    }
+}
+
+TEST_F(SessionRunnerTest, MultiSecuritySeedIndependence) {
+    RunConfig config = makeMultiSecConfig(dir_, 1);
+    SessionRunner runner;
+    RunResult result = runner.run(config);
+
+    ASSERT_EQ(result.days.size(), 2u);
+    // Different seeds for different securities (offset by kSeedStride=1024)
+    EXPECT_NE(result.days[0].seed, result.days[1].seed);
+}
+
+TEST_F(SessionRunnerTest, MultiSecurityManifest) {
+    RunConfig config = makeMultiSecConfig(dir_, 2);
+    SessionRunner runner;
+    runner.run(config);
+
+    std::ifstream ifs((fs::path(dir_) / "manifest.json").string());
+    ASSERT_TRUE(ifs.is_open());
+    std::string content((std::istreambuf_iterator<char>(ifs)),
+                         std::istreambuf_iterator<char>());
+
+    EXPECT_NE(content.find("\"format_version\": \"1.1\""), std::string::npos);
+    EXPECT_NE(content.find("\"securities\":"), std::string::npos);
+    EXPECT_NE(content.find("\"symbol\": \"AAA\""), std::string::npos);
+    EXPECT_NE(content.find("\"symbol\": \"BBB\""), std::string::npos);
+    EXPECT_NE(content.find("\"p0_ticks\": 10000"), std::string::npos);
+    EXPECT_NE(content.find("\"p0_ticks\": 20000"), std::string::npos);
+    EXPECT_NE(content.find("AAA/2026-01-02.qrsdp"), std::string::npos);
+    EXPECT_NE(content.find("BBB/2026-01-02.qrsdp"), std::string::npos);
+    // v1.0 has top-level "sessions" without a "securities" wrapper.
+    // In v1.1, "securities" must appear before any "sessions".
+    auto sec_pos = content.find("\"securities\":");
+    auto sess_pos = content.find("\"sessions\":");
+    EXPECT_NE(sec_pos, std::string::npos);
+    EXPECT_LT(sec_pos, sess_pos) << "securities must precede sessions in v1.1";
+}
+
+TEST_F(SessionRunnerTest, SingleSecurityBackwardCompat) {
+    // Empty securities vector -> v1.0 format
+    RunConfig config = makeTestConfig(dir_, 1);
+    ASSERT_TRUE(config.securities.empty());
+
+    SessionRunner runner;
+    RunResult result = runner.run(config);
+
+    // Files are in the root output_dir, not in subdirectories
+    EXPECT_TRUE(fs::exists(fs::path(dir_) / "2026-01-02.qrsdp"));
+
+    std::ifstream ifs((fs::path(dir_) / "manifest.json").string());
+    ASSERT_TRUE(ifs.is_open());
+    std::string content((std::istreambuf_iterator<char>(ifs)),
+                         std::istreambuf_iterator<char>());
+
+    EXPECT_NE(content.find("\"format_version\": \"1.0\""), std::string::npos);
+    EXPECT_NE(content.find("\"sessions\":"), std::string::npos);
+    EXPECT_EQ(content.find("\"securities\":"), std::string::npos)
+        << "securities array should not exist in v1.0 manifest";
+}
+
 }  // namespace test
 }  // namespace qrsdp

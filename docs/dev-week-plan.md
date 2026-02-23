@@ -187,7 +187,7 @@ From the proposal, scoped to what is achievable and useful:
 3. **Stretch goals** (in priority order, tackle what time allows)
    - **Log viewer CLI**: `qrsdp_log_info <file.qrsdp>` — print header, chunk count, record count, time range, compression ratio
    - **Book replay from log**: replay events through `MultiLevelBook` to reconstruct full book state at any point (useful for the Python reader and depth heatmaps)
-   - **Multiple securities**: parameterise session runner for N independent securities writing to separate log files
+   - [x] **Multiple securities**: parameterise session runner for N independent securities writing to separate log files
    - **Session index file**: write a separate `.qrsdp.idx` file mapping chunk offsets for O(1) random access by timestamp
 
 4. **Final commit and tag**

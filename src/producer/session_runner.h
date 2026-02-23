@@ -7,6 +7,17 @@
 
 namespace qrsdp {
 
+struct SecurityConfig {
+    std::string symbol;
+    int32_t  p0_ticks;
+    uint32_t tick_size;
+    uint32_t levels_per_side;
+    uint32_t initial_spread_ticks;
+    uint32_t initial_depth;
+    IntensityParams intensity_params;
+    QueueReactiveParams queue_reactive;
+};
+
 struct RunConfig {
     std::string run_id;
     std::string output_dir;
@@ -22,9 +33,11 @@ struct RunConfig {
     uint32_t num_days;
     uint32_t chunk_capacity;    // 0 = use default (4096)
     std::string start_date;     // "YYYY-MM-DD"
+    std::vector<SecurityConfig> securities;  // empty = single-security mode
 };
 
 struct DayResult {
+    std::string symbol;         // empty for single-security runs
     std::string date;
     std::string filename;       // relative to output_dir
     uint64_t seed;

@@ -43,7 +43,7 @@ notebooks/
   02_stylised_facts.ipynb        Event distributions, returns, autocorrelation
   03_session_summary.ipynb       Per-day and multi-day stats dashboard
 
-tests/qrsdp/    Google Test suite (87 tests)
+tests/qrsdp/    Google Test suite (91 tests)
 tools/qrsdp_ui/  ImGui + ImPlot real-time debugging UI
 docs/            Project docs, model reviews, audit reports
 docker/          Dockerfiles for headless build, test, and notebook environments
@@ -77,7 +77,7 @@ docker-compose -f docker/docker-compose.yml run --rm simulator
 | `qrsdp_run` | Multi-day session runner — generates datasets with continuous price chaining |
 | `qrsdp_log_info` | Log inspector — prints header, stats, and sample records from a `.qrsdp` file |
 | `qrsdp_ui` | Real-time debugging UI (ImGui/ImPlot/GLFW) |
-| `tests` | Google Test suite (87 tests) |
+| `tests` | Google Test suite (91 tests) |
 
 ---
 
@@ -95,6 +95,9 @@ docker-compose -f docker/docker-compose.yml run --rm simulator
 
 # Generate a full year (252 trading days, ~580M events, ~6.8 GB)
 ./build/qrsdp_run --seed 42 --days 252 --seconds 23400
+
+# Multi-security run (3 symbols, parallel execution)
+./build/qrsdp_run --seed 42 --days 5 --securities "AAPL:10000,MSFT:15000,GOOG:20000"
 
 # Inspect a log file
 ./build/qrsdp_log_info output/run_42/2026-01-02.qrsdp
@@ -146,7 +149,7 @@ Performance: ~5M events/s write throughput, 2.05x LZ4 compression ratio, ~27 MB 
 
 ## Project Status
 
-The QRSDP producer is fully functional with two intensity models, a real-time debugging UI, chunked LZ4-compressed binary event logs, a multi-day session runner, Python analysis tools with interactive Jupyter notebooks, and a comprehensive test suite (87 tests). Docker support is included for headless builds and testing.
+The QRSDP producer is fully functional with two intensity models, a real-time debugging UI, chunked LZ4-compressed binary event logs, a multi-day session runner with multi-security parallel execution, Python analysis tools with interactive Jupyter notebooks, and a comprehensive test suite (91 tests). Docker support is included for headless builds and testing.
 
 ---
 
