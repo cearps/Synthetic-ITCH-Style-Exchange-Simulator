@@ -42,6 +42,7 @@ notebooks/
   01_price_visualisation.ipynb   Zoomable candlestick charts, spread, multi-day overview
   02_stylised_facts.ipynb        Event distributions, returns, autocorrelation
   03_session_summary.ipynb       Per-day and multi-day stats dashboard
+  04_multi_security_comparison.ipynb  Cross-security price paths, returns, and spread comparison
 
 tests/qrsdp/    Google Test suite (91 tests)
 tools/qrsdp_ui/  ImGui + ImPlot real-time debugging UI

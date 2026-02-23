@@ -356,6 +356,7 @@ jupyter notebook
 | `01_price_visualisation.ipynb` | Zoomable candlestick charts (resolution auto-switches on zoom), bid-ask spread, multi-day overview |
 | `02_stylised_facts.ipynb` | Event type distribution, inter-arrival times, return distributions, autocorrelation |
 | `03_session_summary.ipynb` | Per-day and multi-day stats dashboard: event counts, prices, compression, shifts |
+| `04_multi_security_comparison.ipynb` | Cross-security price paths (raw and normalised), return distributions, spread overlay, aggregate stats |
 
 ### Python Modules
 
