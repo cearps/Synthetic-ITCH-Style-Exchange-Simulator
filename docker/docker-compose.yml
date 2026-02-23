@@ -6,17 +6,13 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.build
     volumes:
-      - ../src:/app/src:ro
-      - ../build:/app/build
+      - output:/app/output
     working_dir: /app
 
   test:
     build:
       context: ..
       dockerfile: docker/Dockerfile.test
-    volumes:
-      - ../src:/app/src:ro
-      - ../tests:/app/tests:ro
     working_dir: /app
     command: ["/app/build/tests", "--gtest_color=yes"]
 
@@ -25,9 +21,18 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.build
     volumes:
-      - ../src:/app/src:ro
-      - ../build:/app/build
+      - output:/app/output
     working_dir: /app
+    command: ["/app/build/qrsdp_run", "--seed", "42", "--days", "5", "--output", "/app/output/run_42"]
+
+  notebooks:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.notebooks
+    volumes:
+      - output:/app/output
     ports:
-      - "9999:9999/udp"
-    command: ["/app/build/qrsdp_cli", "12345", "30"]
+      - "8888:8888"
+
+volumes:
+  output:

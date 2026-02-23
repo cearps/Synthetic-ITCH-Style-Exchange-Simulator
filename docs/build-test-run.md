@@ -121,12 +121,20 @@ cmake .. -DBUILD_QRSDP_UI=OFF
 ### Docker (Linux, headless only)
 
 ```bash
+# Build the C++ simulator
 docker-compose -f docker/docker-compose.yml build build
+
+# Run the test suite
 docker-compose -f docker/docker-compose.yml run --rm test
+
+# Generate 5 trading days of data
 docker-compose -f docker/docker-compose.yml run --rm simulator
+
+# Launch Jupyter notebooks (accessible at http://localhost:8888)
+docker-compose -f docker/docker-compose.yml up notebooks
 ```
 
-The Docker image builds with GCC on Ubuntu 22.04. The UI is not included (no display server). The `simulator` service runs `qrsdp_cli 12345 30` by default.
+The build and test images use GCC on Ubuntu 22.04 with the UI disabled (no display server). The `simulator` service runs `qrsdp_run --seed 42 --days 5` by default, writing to a shared `output` volume. The `notebooks` service provides a Jupyter environment with all Python dependencies pre-installed, mounting the same output volume for analysis.
 
 ---
 

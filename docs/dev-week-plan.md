@@ -228,11 +228,11 @@ These should be resolved before writing code:
 
 - [x] `qrsdp_cli 42 23400 output.qrsdp` produces a compressed binary event log for a full trading day
 - [x] Event log can be read back in C++ with verified record integrity
-- [ ] Event log can be read in Python and loaded into numpy arrays
-- [ ] At least 2 Jupyter notebooks produce meaningful visualisations (price, event distributions)
-- [ ] Throughput and compression measurements are documented
-- [ ] All existing tests still pass; new tests cover the log write/read round-trip
-- [ ] Documentation is updated to reflect the new architecture
+- [x] Event log can be read in Python and loaded into numpy arrays
+- [x] At least 2 Jupyter notebooks produce meaningful visualisations (price, event distributions)
+- [x] Throughput and compression measurements are documented
+- [x] All existing tests still pass; new tests cover the log write/read round-trip
+- [x] Documentation is updated to reflect the new architecture
 
 ---
 

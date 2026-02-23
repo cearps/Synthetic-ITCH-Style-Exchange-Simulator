@@ -13,10 +13,10 @@ WORKDIR /app
 COPY CMakeLists.txt ./
 COPY src/ ./src/
 COPY tests/ ./tests/
+COPY third_party/ ./third_party/
 
 RUN mkdir -p build && cd build && \
-    cmake -DBUILD_TESTING=ON .. && \
+    cmake -DBUILD_TESTING=ON -DBUILD_QRSDP_UI=OFF .. && \
     cmake --build . --target tests --config Debug
 
 CMD ["/app/build/tests", "--gtest_color=yes"]
-

@@ -1,9 +1,7 @@
 FROM ubuntu:22.04
 
-# Avoid interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install build dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
@@ -12,17 +10,14 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy CMake configuration
 COPY CMakeLists.txt ./
-
-# Copy source code
 COPY src/ ./src/
+COPY third_party/ ./third_party/
 
-# Build directory
 RUN mkdir -p build && cd build && \
-    cmake .. && \
-    cmake --build . --config Release || (echo "Build failed, showing errors:" && cat CMakeFiles/CMakeError.log 2>/dev/null || true && exit 1)
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_QRSDP_UI=OFF -DBUILD_TESTING=OFF && \
+    cmake --build .
 
-# Default command (can be overridden)
+VOLUME /app/output
+
 CMD ["/app/build/qrsdp_cli"]
-
