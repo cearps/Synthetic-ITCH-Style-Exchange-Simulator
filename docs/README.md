@@ -10,6 +10,10 @@ This folder contains project documentation for both humans and AI coding agents.
 - [Chunk size tuning](chunk-size-tuning.md) — compression vs granularity tradeoff analysis
 - [Dev week plan](dev-week-plan.md) — 5-day plan for event log persistence, replay, and Jupyter visualisation
 
+## Python Analysis
+
+- [Python notebooks](build-test-run.md#python-notebooks) — setup, data generation, and interactive notebooks for price visualisation, stylised facts, and session summaries
+
 ## QRSDP Producer
 
 - [QRSDP Mechanics](producer/QRSDP_MECHANICS.md) — method-level breakdown of the producer

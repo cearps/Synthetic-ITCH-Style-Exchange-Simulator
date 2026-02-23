@@ -1,0 +1,8 @@
+numpy
+lz4
+plotly
+pandas
+ipywidgets>=8.0
+anywidget
+scipy
+jupyter

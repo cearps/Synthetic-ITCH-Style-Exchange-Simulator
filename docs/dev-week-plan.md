@@ -226,8 +226,8 @@ These should be resolved before writing code:
 
 ## Success Criteria (End of Week)
 
-- [ ] `qrsdp_cli 42 23400 output.qrsdp` produces a compressed binary event log for a full trading day
-- [ ] Event log can be read back in C++ with verified record integrity
+- [x] `qrsdp_cli 42 23400 output.qrsdp` produces a compressed binary event log for a full trading day
+- [x] Event log can be read back in C++ with verified record integrity
 - [ ] Event log can be read in Python and loaded into numpy arrays
 - [ ] At least 2 Jupyter notebooks produce meaningful visualisations (price, event distributions)
 - [ ] Throughput and compression measurements are documented

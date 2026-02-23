@@ -291,6 +291,47 @@ cd build && ctest --output-on-failure
 
 ---
 
+## Python Notebooks
+
+Interactive analysis notebooks live in the `notebooks/` directory. They read the `.qrsdp` binary event logs produced by the C++ simulator and provide zoomable price charts, statistical analysis, and session dashboards using Plotly.
+
+### Setup
+
+```bash
+cd notebooks
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+jupyter notebook
+```
+
+### Generating Data
+
+```bash
+# Quick test (5 days)
+./build/qrsdp_run --seed 42 --days 5 --seconds 23400
+
+# Full year (252 trading days, ~580M events, ~6.8 GB)
+./build/qrsdp_run --seed 42 --days 252 --seconds 23400
+```
+
+### Notebooks
+
+| Notebook | Description |
+|---|---|
+| `01_price_visualisation.ipynb` | Zoomable candlestick charts (resolution auto-switches on zoom), bid-ask spread, multi-day overview |
+| `02_stylised_facts.ipynb` | Event type distribution, inter-arrival times, return distributions, autocorrelation |
+| `03_session_summary.ipynb` | Per-day and multi-day stats dashboard: event counts, prices, compression, shifts |
+
+### Python Modules
+
+| Module | Description |
+|---|---|
+| `qrsdp_reader.py` | Binary `.qrsdp` reader: header parsing, LZ4 chunk decompression, manifest iteration |
+| `book_replay.py` | Minimal order book replay matching C++ shift mechanics, produces mid-price/spread time series |
+| `ohlc.py` | Multi-resolution OHLC bar computation (1s, 10s, 1min, 5min) with zoom-level resolution selector |
+
+---
+
 ## Source Layout
 
 ```

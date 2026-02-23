@@ -38,3 +38,6 @@ docker-data/
 
 venv/
 output/
+
+__pycache__/
+notebooks/.ipynb_checkpoints/
