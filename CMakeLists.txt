@@ -49,6 +49,7 @@ set(RNG_SOURCES       src/rng/mt19937_rng.cpp)
 set(IO_SOURCES
     src/io/in_memory_sink.cpp
     src/io/binary_file_sink.cpp
+    src/io/event_log_reader.cpp
 )
 set(PRODUCER_SOURCES  src/producer/qrsdp_producer.cpp)
 
@@ -71,6 +72,11 @@ target_link_libraries(simulator_lib PUBLIC lz4)
 add_executable(qrsdp_cli src/main.cpp)
 target_compile_options(qrsdp_cli PRIVATE ${PROJECT_WARNING_FLAGS})
 target_link_libraries(qrsdp_cli PRIVATE simulator_lib)
+
+# Log inspection tool
+add_executable(qrsdp_log_info src/log_info_main.cpp)
+target_compile_options(qrsdp_log_info PRIVATE ${PROJECT_WARNING_FLAGS})
+target_link_libraries(qrsdp_log_info PRIVATE simulator_lib)
 
 # Google Test setup
 option(BUILD_TESTING "Enable testing" ON)
@@ -96,6 +102,7 @@ if(BUILD_TESTING)
         tests/qrsdp/test_attribute_sampler.cpp
         tests/qrsdp/test_producer.cpp
         tests/qrsdp/test_binary_file_sink.cpp
+        tests/qrsdp/test_event_log_reader.cpp
     )
 
     if(TEST_SOURCES)
