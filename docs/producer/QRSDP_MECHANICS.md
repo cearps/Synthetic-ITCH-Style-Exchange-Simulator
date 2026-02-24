@@ -1,6 +1,6 @@
 # QRSDP Mechanics: How It Works and Where
 
-This document is a **method-level breakdown** of the QRSDP producer: what runs, in what order, and which functions do what.
+This document is a **method-level breakdown** of the QRSDP producer: what runs, in what order, and which functions do what. The theoretical foundation is the queue-reactive model of Huang, Lehalle & Rosenbaum (2015) [[1]](#references); for context on how this approach relates to the broader LOB simulation literature, see the survey by Jain et al. (2024) [[2]](#references).
 
 ---
 
@@ -43,7 +43,7 @@ TradingSession (config) ──► Producer.startSession() or runSession()
 
 ## 3. Entry points: producer
 
-**File:** `src/qrsdp/qrsdp_producer.cpp`  
+**File:** `src/producer/qrsdp_producer.cpp`  
 **Class:** `QrsdpProducer` (implements `IProducer`)
 
 | Method | Purpose |
@@ -64,17 +64,19 @@ What happens inside **one** call to `stepOneEvent(sink)`:
 
 | Step | Component | Method | In / out |
 |------|-----------|--------|----------|
-| 1 | Book | **`book_->features()`** | → `BookFeatures f` (best_bid_ticks, best_ask_ticks, q_bid_best, q_ask_best, spread_ticks, imbalance) |
-| 2 | Intensity model | **`intensityModel_->compute(f)`** | → `Intensities` (add_bid, add_ask, cancel_bid, cancel_ask, exec_buy, exec_sell) |
+| 1 | Book | **`book_->features()`** + depth queries | → `BookState` (features + per-level depths) |
+| 2 | Intensity model | **`intensityModel_->compute(state)`** | → `Intensities` (add_bid, add_ask, cancel_bid, cancel_ask, exec_buy, exec_sell) |
 | 3 | Event sampler | **`eventSampler_->sampleDeltaT(intens.total())`** | → `dt` (seconds to next event) |
 | 4 | Producer | `t_ += dt`; if `t_ >= session_seconds_` return false | — |
-| 5 | Event sampler | **`eventSampler_->sampleType(intens)`** | → `EventType` (one of ADD_BID, ADD_ASK, CANCEL_BID, CANCEL_ASK, EXECUTE_BUY, EXECUTE_SELL) |
-| 6 | Attribute sampler | **`attributeSampler_->sample(type, *book_, f)`** | → `EventAttrs` (side, price_ticks, qty=1, order_id=0) |
+| 5a | Per-level (HLR) | **`eventSampler_->sampleIndexFromWeights(per_level)`** | → index decoded to `(EventType, level_hint)` via `decodePerLevelIndex` |
+| 5b | Aggregate (Simple) | **`eventSampler_->sampleType(intens)`** | → `EventType` (categorical over 6 types) |
+| 6 | Attribute sampler | **`attributeSampler_->sample(type, *book_, f, level_hint)`** | → `EventAttrs` (side, price_ticks, qty=1) |
 | 7 | Producer | Build `SimEvent` from type + attrs + `order_id_++` | — |
-| 8 | Book | **`book_->apply(ev)`** | Updates depths (and may call shift if best level goes to 0) |
+| 8 | Book | **`book_->apply(ev)`** | Updates depths (and may shift if best level goes to 0) |
+| 8a | Producer | If shift occurred and `theta_reinit > 0`: probabilistic book **`reinitialize()`** | — |
 | 9 | Producer | Build `EventRecord`, **`sink.append(rec)`**, `++events_written_` | — |
 
-So the **actual QRSDP logic** is: **features → compute → sampleDeltaT → sampleType → sample (attrs) → apply → append**.
+Step 5 differs by model: the HLR model provides per-level weights (4K+2 entries for K levels) that jointly determine the event type *and* target level, while SimpleImbalance samples the type from 6 aggregate rates and lets the attribute sampler choose the level independently.
 
 ---
 
@@ -82,7 +84,7 @@ So the **actual QRSDP logic** is: **features → compute → sampleDeltaT → sa
 
 ### 5.1 Order book — `IOrderBook` / `MultiLevelBook`
 
-**Files:** `src/qrsdp/i_order_book.h`, `src/qrsdp/multi_level_book.cpp` (and `.h`)
+**Files:** `src/book/i_order_book.h`, `src/book/multi_level_book.cpp` (and `.h`)
 
 | Method                                          | Where                      | What it does                                                                                                                                                                                                                                                                                 |
 | ----------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -99,48 +101,61 @@ So the **actual QRSDP logic** is: **features → compute → sampleDeltaT → sa
 
 ---
 
-### 5.2 Intensity model — `IIntensityModel` / `SimpleImbalanceIntensity`
+### 5.2 Intensity models — `IIntensityModel`
 
-**Files:** `src/qrsdp/i_intensity_model.h`, `src/qrsdp/simple_imbalance_intensity.cpp` (and `.h`)
+**Files:** `src/model/i_intensity_model.h`, `src/model/simple_imbalance_intensity.*`, `src/model/curve_intensity_model.*`
 
-| Method | Where | What it does |
-|--------|--------|---------------|
-| **`compute(BookFeatures f)`** | `SimpleImbalanceIntensity::compute` | Computes six rates from `f` and `params_`: **add** = base_L×(1∓I), **execute** = base_M×(epsilon_exec + max(±I,0)), **cancel** = base_C×q_bid/q_ask; each is passed through **`clampNonNegative`** (no NaN/neg, minimum ε) and returned as **`Intensities`**. |
+Both models implement `compute(BookState)` → `Intensities` (six rates). The producer only calls `compute()` and `intens.total()`.
 
-So **all intensity formulas** live in this one method; the producer only calls **`compute(f)`** and **`intens.total()`** (and the sampler uses **`intens.at(type)`**).
+#### SimpleImbalanceIntensity (legacy)
+
+| Method | What it does |
+|--------|---------------|
+| **`compute(state)`** | Six rates from imbalance I and total depths: **add** = base_L×(1∓sI×I)×spread_mult, **execute** = base_M×(ε + max(±sI×I, 0))×spread_mult, **cancel** = base_C×sC×total_depth. Spread-dependent multipliers: add boosted, exec dampened when spread > 2. |
+
+#### CurveIntensityModel (HLR2014)
+
+| Method | What it does |
+|--------|---------------|
+| **`compute(state)`** | Per-level intensity from lookup tables: **add** λ^L_i(n), **cancel** λ^C_i(n) for each level i, **market** λ^M(n) at best only. Applies spread-dependent and imbalance-driven multipliers. Returns aggregate sums as `Intensities`, and stores per-level weights for joint type+level sampling. |
+| **`getPerLevelIntensities(weights_out)`** | Fills a 4K+2 vector of per-(type, level) intensities from the last `compute()`. The event sampler draws from these weights to jointly select the event type and target level. |
+| **`decodePerLevelIndex(idx, K, type, level)`** | Static: maps a flat index [0..4K+1] back to `(EventType, level)`. |
+
+The HLR model's per-level sampling ensures that the level targeted by an add or cancel is chosen proportionally to the intensity at that level, rather than independently by the attribute sampler.
 
 ---
 
 ### 5.3 Event sampler — `IEventSampler` / `CompetingIntensitySampler`
 
-**Files:** `src/qrsdp/i_event_sampler.h`, `src/qrsdp/competing_intensity_sampler.cpp` (and `.h`)
+**Files:** `src/sampler/i_event_sampler.h`, `src/sampler/competing_intensity_sampler.cpp` (and `.h`)
 
 | Method | Where | What it does |
 |--------|--------|---------------|
 | **`sampleDeltaT(lambdaTotal)`** | `CompetingIntensitySampler::sampleDeltaT` | Draws one uniform U, clamps to [kMinU, 1), returns **Δt = −ln(U) / lambdaTotal** (exponential inter-arrival time). |
-| **`sampleType(Intensities intens)`** | `CompetingIntensitySampler::sampleType` | Draws one uniform U; cumulative sum over the six types in order (ADD_BID, ADD_ASK, CANCEL_BID, CANCEL_ASK, EXECUTE_BUY, EXECUTE_SELL); returns the first type for which U < cum/total. So type i is chosen with probability λ_i / λ_total. |
+| **`sampleType(Intensities intens)`** | `CompetingIntensitySampler::sampleType` | Draws one uniform U; cumulative sum over the six types in order (ADD_BID, ADD_ASK, CANCEL_BID, CANCEL_ASK, EXECUTE_BUY, EXECUTE_SELL); returns the first type for which U < cum/total. So type i is chosen with probability λ_i / λ_total. Used by SimpleImbalance. |
+| **`sampleIndexFromWeights(weights)`** | `CompetingIntensitySampler::sampleIndexFromWeights` | Categorical draw from an arbitrary weight vector (used by HLR for joint type+level selection). |
 
-So **when** the next event occurs and **which type** are both determined here; the producer only calls these two methods.
+For SimpleImbalance the producer calls `sampleType`; for HLR it calls `sampleIndexFromWeights` on the per-level weights, then decodes the index to `(EventType, level_hint)`.
 
 ---
 
 ### 5.4 Attribute sampler — `IAttributeSampler` / `UnitSizeAttributeSampler`
 
-**Files:** `src/qrsdp/i_attribute_sampler.h`, `src/qrsdp/unit_size_attribute_sampler.cpp` (and `.h`)
+**Files:** `src/sampler/i_attribute_sampler.h`, `src/sampler/unit_size_attribute_sampler.cpp` (and `.h`)
 
 | Method | Where | What it does |
 |--------|--------|---------------|
-| **`sample(EventType type, IOrderBook& book, BookFeatures f)`** | `UnitSizeAttributeSampler::sample` | Returns **`EventAttrs`** (side, price_ticks, qty=1, order_id=0). **ADD_BID/ADD_ASK:** level k from **`sampleLevelIndex(book.numLevels())`** (weight ∝ exp(−α·k)), then price = **book.bidPriceAtLevel(k)** or ask. **CANCEL_BID/CANCEL_ASK:** level from **`sampleCancelLevelIndex(is_bid, book)`** (weight = depth at level), then price at that level. **EXECUTE_BUY:** side=ASK, price=**f.best_ask_ticks**. **EXECUTE_SELL:** side=BID, price=**f.best_bid_ticks**. |
+| **`sample(type, book, f, level_hint)`** | `UnitSizeAttributeSampler::sample` | Returns **`EventAttrs`** (side, price_ticks, qty=1). **ADD_BID/ADD_ASK:** first checks for spread improvement (if spread > 1 and `spread_improve_coeff > 0`, may place the add inside the spread with probability min(1, (spread−1)×coeff)); otherwise uses `level_hint` if provided by HLR, or samples level k ∝ exp(−α·k). **CANCEL_BID/CANCEL_ASK:** uses `level_hint` or samples by depth weight. **EXECUTE_BUY/SELL:** always at best price. |
 | **`sampleLevelIndex(num_levels)`** | private | Weights exp(−α·k), categorical draw → level index for adds. |
-| **`sampleCancelLevelIndex(is_bid, book)`** | private | Weights = depth at each level (from **book.bidDepthAtLevel(k)** / **askDepthAtLevel(k)**), categorical draw → level index for cancels (only non-empty levels get weight). |
+| **`sampleCancelLevelIndex(is_bid, book)`** | private | Weights = depth at each level, categorical draw → level index for cancels. |
 
-So **where** (which price/level) and **qty=1** are determined here; the producer only calls **`sample(type, book, f)`**.
+When the HLR model provides a `level_hint`, the sampler uses it directly for level selection (but spread improvement can still override it for adds). When `level_hint == kLevelHintNone` (SimpleImbalance), the sampler chooses the level independently.
 
 ---
 
 ### 5.5 RNG — `IRng` / `Mt19937Rng`
 
-**Files:** `src/qrsdp/irng.h`, `src/qrsdp/mt19937_rng.cpp` (and `.h`)
+**Files:** `src/rng/irng.h`, `src/rng/mt19937_rng.cpp` (and `.h`)
 
 | Method | Purpose |
 |--------|---------|
@@ -153,7 +168,7 @@ Determinism: same session seed → same sequence of events.
 
 ### 5.6 Sink — `IEventSink` / `InMemorySink`
 
-**Files:** `src/qrsdp/i_event_sink.h`, `src/qrsdp/in_memory_sink.cpp` (and `.h`)
+**Files:** `src/io/i_event_sink.h`, `src/io/in_memory_sink.cpp` (and `.h`)
 
 | Method | Purpose |
 |--------|---------|
@@ -182,12 +197,23 @@ In-memory impl stores records in a `std::vector<EventRecord>`.
 
 | What | Where (method / file) |
 |------|------------------------|
-| Session setup, event loop, append to sink | **QrsdpProducer::startSession**, **stepOneEvent**, **runSession** — `qrsdp_producer.cpp` |
-| Book state, spread, imbalance, apply, shift | **MultiLevelBook::seed**, **features**, **apply**, **shiftBidBook** / **shiftAskBook** — `multi_level_book.cpp` |
-| All six λ formulas, clamp | **SimpleImbalanceIntensity::compute** (and **clampNonNegative**) — `simple_imbalance_intensity.cpp` |
-| Time to next event (exponential) | **CompetingIntensitySampler::sampleDeltaT** — `competing_intensity_sampler.cpp` |
-| Which event type (categorical) | **CompetingIntensitySampler::sampleType** — `competing_intensity_sampler.cpp` |
-| Price/level for add and cancel, best for execute | **UnitSizeAttributeSampler::sample** (and **sampleLevelIndex**, **sampleCancelLevelIndex**) — `unit_size_attribute_sampler.cpp` |
-| Deterministic randomness | **Mt19937Rng::seed**, **uniform** — `mt19937_rng.cpp` |
+| Session setup, event loop, sink | **QrsdpProducer** — `src/producer/qrsdp_producer.cpp` |
+| Book state, apply, shift | **MultiLevelBook** — `src/book/multi_level_book.cpp` |
+| SimpleImbalance intensity formulas | **SimpleImbalanceIntensity::compute** — `src/model/simple_imbalance_intensity.cpp` |
+| HLR curve-based intensities + per-level weights | **CurveIntensityModel::compute** — `src/model/curve_intensity_model.cpp` |
+| HLR default curves, JSON I/O | **makeDefaultHLRParams**, **save/loadHLRParamsToJson** — `src/model/hlr_params.cpp` |
+| Time to next event (exponential) | **CompetingIntensitySampler::sampleDeltaT** — `src/sampler/competing_intensity_sampler.cpp` |
+| Event type selection (aggregate or per-level) | **sampleType** / **sampleIndexFromWeights** — `src/sampler/competing_intensity_sampler.cpp` |
+| Price/level, spread improvement | **UnitSizeAttributeSampler::sample** — `src/sampler/unit_size_attribute_sampler.cpp` |
+| Deterministic randomness | **Mt19937Rng::seed**, **uniform** — `src/rng/mt19937_rng.cpp` |
+| Calibration from event logs | **IntensityEstimator** — `src/calibration/intensity_estimator.cpp` |
 
-That’s the full QRSDP flow and the methods that implement it.
+That's the full QRSDP flow and the methods that implement it.
+
+---
+
+## References
+
+1. W. Huang, C.-A. Lehalle, and M. Rosenbaum, "Simulating and Analyzing Order Book Data: The Queue-Reactive Model," *Journal of the American Statistical Association*, vol. 110, no. 509, pp. 107–122, 2015. [arXiv:1312.0563](https://arxiv.org/abs/1312.0563)
+
+2. K. Jain, N. Firoozye, J. Kochems, and P. Treleaven, "Limit Order Book Simulations: A Review," *arXiv preprint*, 2024. [arXiv:2402.17359](https://arxiv.org/abs/2402.17359)

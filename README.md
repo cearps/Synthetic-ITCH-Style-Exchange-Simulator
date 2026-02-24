@@ -18,7 +18,7 @@ The system is built around a **Queue-Reactive, State-Dependent Poisson (QRSDP)**
 
 Two intensity models are implemented:
 - **Legacy (SimpleImbalance)**: imbalance-driven rates with flat add, linear cancel, and configurable execution baseline.
-- **HLR2014 (CurveIntensity)**: queue-size-dependent intensity curves per level, based on Huang, Lehalle & Rosenbaum (2014).
+- **HLR2014 (CurveIntensity)**: queue-size-dependent intensity curves per level, based on Huang, Lehalle & Rosenbaum (2015) [[1]](#references).
 
 ---
 
@@ -30,7 +30,7 @@ src/
   rng/           RNG interface + Mersenne Twister implementation
   book/          Order book interface + multi-level book
   model/         Intensity models (SimpleImbalance, CurveIntensity, HLR params)
-  calibration/   Intensity estimation and curve I/O
+  calibration/   Intensity estimation, curve I/O, and calibration CLI
   sampler/       Event sampler + attribute sampler
   io/            Event sinks (in-memory, binary file), log reader, format spec
   producer/      Producer interface, QRSDP producer, session runner
@@ -43,8 +43,9 @@ notebooks/
   02_stylised_facts.ipynb        Event distributions, returns, autocorrelation
   03_session_summary.ipynb       Per-day and multi-day stats dashboard
   04_multi_security_comparison.ipynb  Cross-security price paths, returns, and spread comparison
+  05_model_comparison.ipynb           Side-by-side SimpleImbalance vs HLR with calibration
 
-tests/qrsdp/    Google Test suite (91 tests)
+tests/qrsdp/    Google Test suite (94 tests)
 tools/qrsdp_ui/  ImGui + ImPlot real-time debugging UI
 docs/            Project docs, model reviews, audit reports
 docker/          Dockerfiles for headless build, test, and notebook environments
@@ -76,9 +77,10 @@ docker-compose -f docker/docker-compose.yml run --rm simulator
 |---|---|
 | `qrsdp_cli` | Single-session CLI — runs one session, optionally writes a `.qrsdp` log |
 | `qrsdp_run` | Multi-day session runner — generates datasets with continuous price chaining |
+| `qrsdp_calibrate` | Calibration CLI — estimates HLR intensity curves from `.qrsdp` event logs |
 | `qrsdp_log_info` | Log inspector — prints header, stats, and sample records from a `.qrsdp` file |
 | `qrsdp_ui` | Real-time debugging UI (ImGui/ImPlot/GLFW) |
-| `tests` | Google Test suite (91 tests) |
+| `tests` | Google Test suite (94 tests) |
 
 ---
 
@@ -100,6 +102,13 @@ docker-compose -f docker/docker-compose.yml run --rm simulator
 # Multi-security run (3 symbols, parallel execution)
 ./build/qrsdp_run --seed 42 --days 5 --securities "AAPL:10000,MSFT:15000,GOOG:20000"
 
+# Run with HLR2014 model (queue-size-dependent curves)
+./build/qrsdp_run --seed 42 --days 5 --model hlr
+
+# Calibrate HLR curves from existing data, then run with them
+./build/qrsdp_calibrate --input output/run_42/*.qrsdp --output hlr_curves.json
+./build/qrsdp_run --seed 100 --days 5 --hlr-curves hlr_curves.json
+
 # Inspect a log file
 ./build/qrsdp_log_info output/run_42/2026-01-02.qrsdp
 
@@ -119,7 +128,7 @@ pip install -r requirements.txt
 jupyter notebook
 ```
 
-Open any of the three notebooks to explore the generated data interactively. The price visualisation notebook features zoomable candlestick charts that dynamically switch resolution as you zoom in/out.
+Open any of the five notebooks to explore the generated data interactively. The price visualisation notebook features zoomable candlestick charts that dynamically switch resolution as you zoom in/out.
 
 ---
 
@@ -130,6 +139,7 @@ Open any of the three notebooks to explore the generated data interactively. The
 - [Event Log Format](docs/event-log-format.md) — binary `.qrsdp` file format specification
 - [Chunk Size Tuning](docs/chunk-size-tuning.md) — compression vs granularity tradeoff analysis
 - [QRSDP Mechanics](docs/producer/QRSDP_MECHANICS.md)
+- [HLR Calibration Pipeline](docs/producer/QRSDP_CALIBRATION.md) — calibration CLI, intensity estimation, curve I/O
 - [Model Math & Code Review](docs/06_model_math_and_code_review.md)
 - [SimpleImbalance Audit](docs/07_simple_imbalance_nonsense_audit.md)
 
@@ -150,7 +160,15 @@ Performance: ~5M events/s write throughput, 2.05x LZ4 compression ratio, ~27 MB 
 
 ## Project Status
 
-The QRSDP producer is fully functional with two intensity models, a real-time debugging UI, chunked LZ4-compressed binary event logs, a multi-day session runner with multi-security parallel execution, Python analysis tools with interactive Jupyter notebooks, and a comprehensive test suite (91 tests). Docker support is included for headless builds and testing.
+The QRSDP producer is fully functional with two intensity models, a calibration pipeline for fitting HLR curves from data, a real-time debugging UI, chunked LZ4-compressed binary event logs, a multi-day session runner with multi-security parallel execution, Python analysis tools with interactive Jupyter notebooks, and a comprehensive test suite (94 tests). Docker support is included for headless builds and testing.
+
+---
+
+## References
+
+1. W. Huang, C.-A. Lehalle, and M. Rosenbaum, "Simulating and Analyzing Order Book Data: The Queue-Reactive Model," *Journal of the American Statistical Association*, vol. 110, no. 509, pp. 107–122, 2015. [arXiv:1312.0563](https://arxiv.org/abs/1312.0563)
+
+2. K. Jain, N. Firoozye, J. Kochems, and P. Treleaven, "Limit Order Book Simulations: A Review," *arXiv preprint*, 2024. [arXiv:2402.17359](https://arxiv.org/abs/2402.17359)
 
 ---
 

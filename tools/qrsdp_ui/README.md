@@ -38,18 +38,24 @@ Or from repo root:
 
 ## What the UI shows
 
-- **Controls (left):** Seed, session length (5–60 s), levels, tick size, initial depth/spread, intensity params (base_L, base_M, base_C), alpha. Buttons: **Reset**, **Step 1**, **Step N**, **Run** / Pause, **Debug Preset** (sets initial_depth=1 and base_M=15 so shifts occur quickly). Slider: max events per frame.
-- **Top-of-book / Diagnostics (top-right):** Time, event count, best bid/ask, spread, depths, imbalance, event-type counts, shift counters (up/down/total), last shift time and prices, invariant warnings (red if bid ≥ ask, negative depth, or spread &lt; 1).
+- **Controls (left):** Seed, session length, levels, tick size, initial depth/spread. Model selector: **Legacy (SimpleImbalance)** or **HLR2014 (CurveIntensity)**. Model-specific controls appear based on selection. Buttons: **Reset**, **Step 1**, **Step N**, **Run** / Pause, **Debug Preset**, **Production Preset**. Slider: max events per frame.
+  - **SimpleImbalance controls:** base_L, base_M, base_C, epsilon_exec, spread_sens.
+  - **HLR2014 controls:** spread_sens (HLR), imbalance_sens (HLR), theta_reinit, reinit_mean, curve preset, Nmax.
+  - **Attribute sampler:** alpha (level decay), spread_improve (spread-improving order coefficient).
+- **Top-of-book / Diagnostics (top-right):** Time, event count, best bid/ask, spread, depths, imbalance, event-type counts, shift counters (up/down/total), last shift time and prices, invariant warnings (red if bid >= ask, negative depth, or spread < 1).
 - **Price over time:** ImPlot graph of mid (and optional bid/ask lines) vs time; optional shift markers (scatter when a shift occurs).
-- **Depth at best:** Two lines over “event index” for best bid depth and best ask depth.
+- **Depth at best:** Two lines over "event index" for best bid depth and best ask depth.
 - **Order book ladder:** Top N levels each side (price + depth); best bid/ask rows highlighted.
-- **Recent events:** Last 200 events (t, type, side, price, qty, order_id). Rows marked “SHIFT UP” / “SHIFT DOWN” when a shift occurs.
+- **Recent events:** Last 200 events (t, type, side, price, qty, order_id). Rows marked "SHIFT UP" / "SHIFT DOWN" when a shift occurs.
 
 ## Quick check that shifts appear
 
-1. Click **Debug Preset** (initial_depth=1, base_M=15).
+1. Click **Production Preset** (initial_depth=5, spread feedback enabled, realistic parameters).
 2. Click **Run**.
-3. Watch **Price over time** and **Shifts** in diagnostics; you should see shift markers and increasing shift counts as executes deplete the best level.
+3. Watch **Price over time** and **Shifts** in diagnostics; you should see shift markers and increasing shift counts.
+
+Alternatively, click **Debug Preset** (initial_depth=1, no spread feedback) for faster shifts with minimal depth.
+
 
 ## Requirements
 

@@ -2,6 +2,8 @@
 
 This document describes the **calibration module** for HLR2014-style intensity estimation and curve I/O: how to calibrate from simulated event streams (replay + book state), the intensity estimator, and saving/loading intensity curves as JSON.
 
+The queue-reactive intensity model implemented here follows the framework of Huang, Lehalle & Rosenbaum (2015) [[1]](#references), where the limit order book is modelled as a collection of queues whose event intensities depend on the current queue size. For a broader survey of LOB simulation approaches (Poisson, Hawkes, agent-based, deep learning, SPDEs) and the stylised facts used to validate them, see Jain et al. (2024) [[2]](#references).
+
 ---
 
 ## 1. Overview
@@ -125,6 +127,7 @@ A complete HLR parameter set is stored as:
   "K": 5,
   "n_max": 100,
   "spread_sensitivity": 0.3,
+  "imbalance_sensitivity": 1.0,
   "lambda_L_bid": [
     [v0, v1, v2, ...],
     [v0, v1, v2, ...]
@@ -139,7 +142,8 @@ A complete HLR parameter set is stored as:
 
 - **K** — number of levels per side.
 - **n_max** — max queue size for table entries.
-- **spread_sensitivity** — spread-dependent feedback strength (see below).
+- **spread_sensitivity** — spread-dependent feedback strength (see §6).
+- **imbalance_sensitivity** — imbalance-driven execution feedback strength (see §6).
 - **lambda_L_\*** — per-level add intensity curves (array of K arrays).
 - **lambda_C_\*** — per-level cancel intensity curves.
 - **lambda_M_\*** — market order intensity curves (single arrays).
@@ -170,29 +174,43 @@ if (qrsdp::loadHLRParamsFromJson("hlr_curves.json", p)) {
 
 ---
 
-## 6. Spread-dependent feedback
+## 6. Feedback mechanisms
 
-The `CurveIntensityModel` now applies spread-dependent multipliers (controlled by `spread_sensitivity`):
+The `CurveIntensityModel` applies two feedback mechanisms that keep the model stable and realistic.
+
+### Spread-dependent feedback (`spread_sensitivity`)
+
+Multipliers applied to add and exec intensities, controlled by `spread_sensitivity` (default 0.3):
 
 - **Add multiplier** = exp(sS × (spread − 2)): wide spread → more limit orders (price improvement).
 - **Exec multiplier** = exp(−sS × (spread − 2)): wide spread → fewer market orders.
 
-Neutral at spread=2 ticks (one tick each side of mid). Default sS=0.3. This mirrors the `SimpleImbalanceIntensity` spread feedback.
+Neutral at spread=2 ticks (one tick each side of mid). This mirrors the `SimpleImbalanceIntensity` spread feedback.
+
+### Imbalance-driven feedback (`imbalance_sensitivity`)
+
+Multipliers applied to execution intensities, controlled by `imbalance_sensitivity` (default 1.0):
+
+- **Imbalance** = (total_bid_depth − total_ask_depth) / (total_bid_depth + total_ask_depth), in \[−1, 1\].
+- **exec_sell multiplier** = 1 + iS × max(imbalance, 0): boosted when bid side is heavier (pushes price down).
+- **exec_buy multiplier** = 1 + iS × max(−imbalance, 0): boosted when ask side is heavier (pushes price up).
+
+This creates mean-reverting price dynamics: when one side accumulates depth, executions on that side increase, draining it back towards balance.
 
 ---
 
 ## 7. Default HLR curves
 
-`makeDefaultHLRParams()` produces hand-tuned starter curves:
+`makeDefaultHLRParams()` produces curves tuned to match the empirical findings of HLR2014:
 
 | Curve | Shape | Rationale |
 |-------|-------|-----------|
-| addBest(n) | 30 at n=0, 25 flat | Strong refill when empty, high steady-state |
-| addDeeper(n) | 18/(1+0.08n) | Moderate, slowly decaying |
-| cancelCurve(n) | 0.5n | Linear per-order cancellation, softer than 0.8n |
-| marketCurve(n) | 0 at n=0, 18/(1+0.03n) | No phantom executions on empty, strong pressure |
+| addBest(n) | 15 / (1 + 0.12n) | Decreasing — arrival rate falls with existing depth |
+| addDeeper(n) | 5 / (1 + 0.2n) | Slower at deeper levels to keep total event rate reasonable |
+| cancelCurve(n) | 0.3n / (1 + 0.02n) | Concave — saturates at ~15, matching empirical shape |
+| marketCurve(n) | 0 at n=0, 8 constant | Constant rate independent of depth, so queues can drain |
 
-Steady-state best-level depth ≈ 25–30. Market rate at steady state ≈ 11–12 per side.
+Steady-state best-level depth ≈ 5–6. Total event rate ≈ 69/s (comparable to SimpleImbalance's ~72/s). Event mix: ~50% adds, ~19% cancels, ~31% executions. Price shifts at ~10.7/s.
 
 ---
 
@@ -223,7 +241,7 @@ A single curve is stored as:
 - **HLRParamsIo.LoadBadPathFails** — loading nonexistent file returns false.
 - **HLRParams.DefaultsHaveSpreadSensitivity** — verify defaults have spread_sensitivity=0.3 and marketCurve(0)=0.
 
-Run: `ctest` or the `tests` target.
+Run: `ctest` or the `tests` target (94 tests total).
 
 ---
 
@@ -233,3 +251,11 @@ Run: `ctest` or the `tests` target.
 - **Event-log parser:** when adding ITCH support, introduce a parser that reconstructs queue state from raw feeds.
 - **Multi-security calibration:** calibrate per-security curves from multi-security runs.
 - **Time-of-day weighting:** optional intraday weighting in the estimator.
+
+---
+
+## References
+
+1. W. Huang, C.-A. Lehalle, and M. Rosenbaum, "Simulating and Analyzing Order Book Data: The Queue-Reactive Model," *Journal of the American Statistical Association*, vol. 110, no. 509, pp. 107–122, 2015. [arXiv:1312.0563](https://arxiv.org/abs/1312.0563)
+
+2. K. Jain, N. Firoozye, J. Kochems, and P. Treleaven, "Limit Order Book Simulations: A Review," *arXiv preprint*, 2024. [arXiv:2402.17359](https://arxiv.org/abs/2402.17359)
