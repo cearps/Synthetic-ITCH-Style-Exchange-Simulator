@@ -4,8 +4,8 @@
 
 namespace qrsdp {
 
-UnitSizeAttributeSampler::UnitSizeAttributeSampler(IRng& rng, double alpha)
-    : rng_(&rng), alpha_(alpha) {}
+UnitSizeAttributeSampler::UnitSizeAttributeSampler(IRng& rng, double alpha, double spread_improve_coeff)
+    : rng_(&rng), alpha_(alpha), spread_improve_coeff_(spread_improve_coeff) {}
 
 size_t UnitSizeAttributeSampler::sampleLevelIndex(size_t num_levels) {
     if (num_levels == 0) return 0;
@@ -56,14 +56,32 @@ EventAttrs UnitSizeAttributeSampler::sample(EventType type, const IOrderBook& bo
     const size_t safe_level = use_hint ? std::min(level_hint, num_levels > 0 ? num_levels - 1 : 0) : 0;
 
     switch (type) {
-        case EventType::ADD_BID:
+        case EventType::ADD_BID: {
             out.side = Side::BID;
+            const int spread = f.best_ask_ticks - f.best_bid_ticks;
+            if (spread > 1 && spread_improve_coeff_ > 0.0) {
+                double p_improve = std::min(1.0, static_cast<double>(spread - 1) * spread_improve_coeff_);
+                if (rng_->uniform() < p_improve) {
+                    out.price_ticks = f.best_bid_ticks + 1;
+                    break;
+                }
+            }
             out.price_ticks = book.bidPriceAtLevel(use_hint ? safe_level : sampleLevelIndex(num_levels));
             break;
-        case EventType::ADD_ASK:
+        }
+        case EventType::ADD_ASK: {
             out.side = Side::ASK;
+            const int spread = f.best_ask_ticks - f.best_bid_ticks;
+            if (spread > 1 && spread_improve_coeff_ > 0.0) {
+                double p_improve = std::min(1.0, static_cast<double>(spread - 1) * spread_improve_coeff_);
+                if (rng_->uniform() < p_improve) {
+                    out.price_ticks = f.best_ask_ticks - 1;
+                    break;
+                }
+            }
             out.price_ticks = book.askPriceAtLevel(use_hint ? safe_level : sampleLevelIndex(num_levels));
             break;
+        }
         case EventType::CANCEL_BID:
             out.side = Side::BID;
             out.price_ticks = book.bidPriceAtLevel(use_hint ? safe_level : sampleCancelLevelIndex(true, book));

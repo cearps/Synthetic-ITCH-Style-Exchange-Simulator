@@ -5,9 +5,13 @@
 #include "io/event_log_format.h"
 #include "book/multi_level_book.h"
 #include "model/simple_imbalance_intensity.h"
+#include "model/curve_intensity_model.h"
+#include "model/hlr_params.h"
 #include "rng/mt19937_rng.h"
 #include "sampler/competing_intensity_sampler.h"
 #include "sampler/unit_size_attribute_sampler.h"
+
+#include <memory>
 
 #include <chrono>
 #include <cstdio>
@@ -246,6 +250,7 @@ static std::vector<DayResult> runSecurityDays(
     uint32_t initial_depth,
     const IntensityParams& intensity_params,
     const QueueReactiveParams& queue_reactive,
+    ModelType model_type,
     uint64_t seed_offset)
 {
     namespace fs = std::filesystem;
@@ -258,10 +263,20 @@ static std::vector<DayResult> runSecurityDays(
     const uint64_t base = config.base_seed + seed_offset;
     Mt19937Rng rng(base);
     MultiLevelBook book;
-    SimpleImbalanceIntensity model(intensity_params);
+
+    std::unique_ptr<IIntensityModel> model_ptr;
+    if (model_type == ModelType::HLR) {
+        HLRParams hlr = config.hlr_params.hasCurves()
+            ? config.hlr_params
+            : makeDefaultHLRParams(static_cast<int>(levels_per_side));
+        model_ptr = std::make_unique<CurveIntensityModel>(std::move(hlr));
+    } else {
+        model_ptr = std::make_unique<SimpleImbalanceIntensity>(intensity_params);
+    }
+
     CompetingIntensitySampler sampler(rng);
-    UnitSizeAttributeSampler attrs(rng, 0.5);
-    QrsdpProducer producer(rng, book, model, sampler, attrs);
+    UnitSizeAttributeSampler attrs(rng, 0.5, 0.5);
+    QrsdpProducer producer(rng, book, *model_ptr, sampler, attrs);
 
     const uint32_t chunk_cap = config.chunk_capacity > 0
         ? config.chunk_capacity : kDefaultChunkCapacity;
@@ -353,7 +368,7 @@ RunResult SessionRunner::run(const RunConfig& config) {
             config.p0_ticks, config.tick_size, config.levels_per_side,
             config.initial_spread_ticks, config.initial_depth,
             config.intensity_params, config.queue_reactive,
-            0);
+            config.model_type, 0);
         for (auto& d : days) {
             result.total_events += d.events_written;
             result.days.push_back(std::move(d));
@@ -373,7 +388,7 @@ RunResult SessionRunner::run(const RunConfig& config) {
                         sec.p0_ticks, sec.tick_size, sec.levels_per_side,
                         sec.initial_spread_ticks, sec.initial_depth,
                         sec.intensity_params, sec.queue_reactive,
-                        si * kSeedStride);
+                        sec.model_type, si * kSeedStride);
                 } catch (const std::exception& e) {
                     errors[si] = e.what();
                 }

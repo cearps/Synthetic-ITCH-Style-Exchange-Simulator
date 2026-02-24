@@ -23,7 +23,7 @@ static RunConfig makeTestConfig(const std::string& dir, uint32_t num_days, uint3
     c.tick_size = 100;
     c.initial_spread_ticks = 2;
     c.initial_depth = 5;
-    c.intensity_params = {22.0, 0.2, 30.0, 1.0, 1.0, 0.5};
+    c.intensity_params = {22.0, 0.2, 30.0, 1.0, 1.0, 0.5, 0.0};
     c.num_days = num_days;
     c.chunk_capacity = 64;
     c.start_date = "2026-01-02";

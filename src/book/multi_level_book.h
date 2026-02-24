@@ -37,6 +37,8 @@ private:
 
     void shiftBidBook();
     void shiftAskBook();
+    void improveBid(int32_t price, uint32_t qty);
+    void improveAsk(int32_t price, uint32_t qty);
     int bidIndexForPrice(int32_t price_ticks) const;
     int askIndexForPrice(int32_t price_ticks) const;
 };

@@ -105,18 +105,20 @@ int main(int argc, char** argv) {
     qrsdp::QrsdpProducer* producer = nullptr;
     qrsdp::InMemorySink sink;
 
-    // Session params (UI-driven)
+    // Session params (UI-driven) — defaults match CLI/production tuning
     uint64_t ui_seed = 777;
-    uint32_t ui_session_seconds = 30;
+    uint32_t ui_session_seconds = 120;
     int32_t ui_p0_ticks = 10000;
     uint32_t ui_levels_per_side = 5;
     uint32_t ui_tick_size = 100;
-    uint32_t ui_initial_depth = 2;
+    uint32_t ui_initial_depth = 5;
     uint32_t ui_initial_spread_ticks = 2;
-    double ui_base_L = 5.0;
-    double ui_base_M = 30.0;
-    double ui_base_C = 0.1;
-    double ui_epsilon_exec = 0.2;
+    double ui_base_L = 20.0;
+    double ui_base_M = 15.0;
+    double ui_base_C = 0.5;
+    double ui_epsilon_exec = 0.5;
+    double ui_spread_sens = 0.4;
+    double ui_spread_improve = 0.5;
     double ui_alpha = 0.5;
     int ui_step_N = 10;
     int ui_max_events_per_frame = 100;
@@ -127,6 +129,8 @@ int main(int argc, char** argv) {
     int ui_model = 0;  // 0 = Legacy (SimpleImbalance), 1 = HLR2014 (CurveIntensity)
     double ui_theta_reinit = 0.0;
     double ui_reinit_mean = 10.0;
+    double ui_hlr_spread_sens = 0.3;
+    double ui_hlr_imb_sens = 1.0;
     int ui_curve_preset = 0;  // 0 = starter large-tick, 1 = high vol, 2 = mean-reverting (same for now)
     int ui_nmax = 100;
 
@@ -134,10 +138,10 @@ int main(int argc, char** argv) {
     std::unique_ptr<qrsdp::SimpleImbalanceIntensity> legacyModelPtr;
     std::unique_ptr<qrsdp::CurveIntensityModel> curveModelPtr;
     std::unique_ptr<qrsdp::UnitSizeAttributeSampler> attrSamplerPtr(
-        new qrsdp::UnitSizeAttributeSampler(rng, ui_alpha));
+        new qrsdp::UnitSizeAttributeSampler(rng, ui_alpha, ui_spread_improve));
     attrSampler = attrSamplerPtr.get();
     {
-        qrsdp::IntensityParams p{ui_base_L, ui_base_C, ui_base_M, 1.0, 1.0, ui_epsilon_exec};
+        qrsdp::IntensityParams p{ui_base_L, ui_base_C, ui_base_M, 1.0, 1.0, ui_epsilon_exec, ui_spread_sens};
         legacyModelPtr = std::make_unique<qrsdp::SimpleImbalanceIntensity>(p);
         intensityModel = legacyModelPtr.get();
     }
@@ -195,18 +199,20 @@ int main(int argc, char** argv) {
         depth_bid_best_history.clear();
         depth_ask_best_history.clear();
         sink.clear();
-        attrSamplerPtr = std::make_unique<qrsdp::UnitSizeAttributeSampler>(rng, ui_alpha);
+        attrSamplerPtr = std::make_unique<qrsdp::UnitSizeAttributeSampler>(rng, ui_alpha, ui_spread_improve);
         attrSampler = attrSamplerPtr.get();
         if (ui_model == 0) {
             legacyModelPtr = std::make_unique<qrsdp::SimpleImbalanceIntensity>(qrsdp::IntensityParams{
-                ui_base_L, ui_base_C, ui_base_M, 1.0, 1.0, ui_epsilon_exec});
+                ui_base_L, ui_base_C, ui_base_M, 1.0, 1.0, ui_epsilon_exec, ui_spread_sens});
             curveModelPtr.reset();
             intensityModel = legacyModelPtr.get();
         } else {
             const int K = static_cast<int>(ui_levels_per_side);
             const int nmax = ui_nmax > 0 ? ui_nmax : 100;
             qrsdp::HLRParams p = qrsdp::makeDefaultHLRParams(K, nmax);
-            curveModelPtr = std::make_unique<qrsdp::CurveIntensityModel>(p);
+            p.spread_sensitivity = ui_hlr_spread_sens;
+            p.imbalance_sensitivity = ui_hlr_imb_sens;
+            curveModelPtr = std::make_unique<qrsdp::CurveIntensityModel>(std::move(p));
             legacyModelPtr.reset();
             intensityModel = curveModelPtr.get();
         }
@@ -335,7 +341,13 @@ int main(int argc, char** argv) {
         ImGui::InputScalar("Initial spread ticks", ImGuiDataType_U32, &ui_initial_spread_ticks);
         if (ui_model == 1) {
             ImGui::Separator();
-            ImGui::Text("Queue-reactive (HLR2014 Model III)");
+            ImGui::Text("HLR2014 Curve Model");
+            ImGui::InputDouble("spread_sens (HLR)", &ui_hlr_spread_sens, 0.05, 0, "%.2f");
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Spread-dependent feedback: >0 boosts adds and dampens execs when spread > 2");
+            ImGui::InputDouble("imbalance_sens (HLR)", &ui_hlr_imb_sens, 0.1, 0, "%.2f");
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Imbalance feedback: >0 boosts execs on the heavier side for mean-reverting dynamics");
             const double theta_min = 0.0, theta_max = 1.0;
             ImGui::SliderScalar("theta_reinit", ImGuiDataType_Double, &ui_theta_reinit, &theta_min, &theta_max, "%.2f");
             if (ImGui::IsItemHovered())
@@ -345,15 +357,25 @@ int main(int argc, char** argv) {
             ImGui::Combo("Curve preset", &ui_curve_preset, preset_items, 3);
             ImGui::InputInt("Nmax (curves)", &ui_nmax); if (ui_nmax < 1) ui_nmax = 1; if (ui_nmax > 500) ui_nmax = 500;
         }
+        if (ui_model == 0) {
+            ImGui::Separator();
+            ImGui::Text("Intensity (SimpleImbalance)");
+            ImGui::InputDouble("base_L", &ui_base_L, 1.0, 0, "%.2f");
+            ImGui::InputDouble("base_M", &ui_base_M, 1.0, 0, "%.2f");
+            ImGui::InputDouble("base_C", &ui_base_C, 0.01, 0, "%.3f");
+            ImGui::InputDouble("epsilon_exec", &ui_epsilon_exec, 0.01, 0, "%.3f");
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Baseline exec rate when I~0. lambda_exec = base_M*(epsilon_exec+...).");
+            ImGui::InputDouble("spread_sens", &ui_spread_sens, 0.05, 0, "%.2f");
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Spread-dependent feedback: >0 boosts adds and dampens execs when spread > 2");
+        }
         ImGui::Separator();
-        ImGui::Text("Intensity (Legacy)");
-        ImGui::InputDouble("base_L", &ui_base_L, 1.0, 0, "%.2f");
-        ImGui::InputDouble("base_M", &ui_base_M, 1.0, 0, "%.2f");
-        ImGui::InputDouble("base_C", &ui_base_C, 0.01, 0, "%.3f");
-        ImGui::InputDouble("epsilon_exec", &ui_epsilon_exec, 0.01, 0, "%.3f");
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Baseline exec rate when I~0. lambda_exec = base_M*(epsilon_exec+...). Use 0.2+ to see executes.");
+        ImGui::Text("Attribute sampler");
         ImGui::InputDouble("alpha (level)", &ui_alpha, 0.1, 0, "%.2f");
+        ImGui::InputDouble("spread_improve", &ui_spread_improve, 0.1, 0, "%.2f");
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Coefficient for spread-improving order insertion. p_improve = min(1, (spread-1)*coeff)");
         ImGui::Separator();
         if (ImGui::Button("Reset")) reset();
         ImGui::SameLine();
@@ -371,14 +393,32 @@ int main(int argc, char** argv) {
             ui_base_L = 5.0;
             ui_base_C = 0.1;
             ui_epsilon_exec = 0.2;
+            ui_spread_sens = 0.0;
+            ui_spread_improve = 0.0;
             ui_alpha = 0.5;
             ui_session_seconds = 30;
             reset();
         }
         ImGui::SameLine();
+        if (ImGui::Button("Production Preset")) {
+            ui_initial_depth = 5;
+            ui_initial_spread_ticks = 2;
+            ui_base_L = 20.0;
+            ui_base_C = 0.5;
+            ui_base_M = 15.0;
+            ui_epsilon_exec = 0.5;
+            ui_spread_sens = 0.4;
+            ui_spread_improve = 0.5;
+            ui_hlr_spread_sens = 0.3;
+            ui_hlr_imb_sens = 1.0;
+            ui_alpha = 0.5;
+            ui_session_seconds = 120;
+            reset();
+        }
+        ImGui::SameLine();
         ImGui::TextDisabled("(?)");
         if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("epsilon_exec must be large enough vs base_L so exec rate competes with add rate when I~0.\n0.2 gives lambda_exec ~ base_M*0.2 (e.g. 6) vs lambda_add ~ base_L (5).");
+            ImGui::SetTooltip("Debug: low depth, no spread feedback (easy to trigger shifts).\nProduction: matches CLI defaults (realistic spread and depth behaviour).");
         }
         ImGui::End();
 

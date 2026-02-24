@@ -26,6 +26,17 @@ Intensities CurveIntensityModel::compute(const BookState& state) const {
         return out;
     }
 
+    // Spread-dependent feedback: wide spread attracts limit orders, dampens executions.
+    // Neutral at spread=2 (one tick each side of mid). Mirrors SimpleImbalanceIntensity.
+    const double sS = params_.spread_sensitivity;
+    double add_spread_mult = 1.0;
+    double exec_spread_mult = 1.0;
+    if (sS > 0.0) {
+        const double spread_delta = static_cast<double>(state.features.spread_ticks) - 2.0;
+        add_spread_mult = std::exp(sS * spread_delta);
+        exec_spread_mult = std::exp(-sS * spread_delta);
+    }
+
     double add_bid = 0.0, add_ask = 0.0, cancel_bid = 0.0, cancel_ask = 0.0;
     double exec_buy = 0.0, exec_sell = 0.0;
 
@@ -38,8 +49,8 @@ Intensities CurveIntensityModel::compute(const BookState& state) const {
         const size_t n_ask = state.ask_depths[si];
 
         double lb = 0.0, la = 0.0, cb = 0.0, ca = 0.0;
-        if (si < params_.lambda_L_bid.size()) lb = params_.lambda_L_bid[si].value(n_bid);
-        if (si < params_.lambda_L_ask.size()) la = params_.lambda_L_ask[si].value(n_ask);
+        if (si < params_.lambda_L_bid.size()) lb = params_.lambda_L_bid[si].value(n_bid) * add_spread_mult;
+        if (si < params_.lambda_L_ask.size()) la = params_.lambda_L_ask[si].value(n_ask) * add_spread_mult;
         if (si < params_.lambda_C_bid.size()) cb = params_.lambda_C_bid[si].value(n_bid);
         if (si < params_.lambda_C_ask.size()) ca = params_.lambda_C_ask[si].value(n_ask);
 
@@ -53,8 +64,28 @@ Intensities CurveIntensityModel::compute(const BookState& state) const {
         last_per_level_[2 * ku + si] = cb;
         last_per_level_[3 * ku + si] = ca;
     }
-    exec_buy = params_.lambda_M_buy.value(state.ask_depths[0]);
-    exec_sell = params_.lambda_M_sell.value(state.bid_depths[0]);
+    // Imbalance-driven feedback: drives mean-reverting price dynamics.
+    // When bid depth > ask depth (positive imbalance), exec_sell is boosted
+    // and exec_buy dampened, pushing the price down towards equilibrium.
+    double exec_imb_buy = 1.0;
+    double exec_imb_sell = 1.0;
+    const double iS = params_.imbalance_sensitivity;
+    if (iS > 0.0) {
+        double total_bid = 0.0, total_ask = 0.0;
+        for (size_t i = 0; i < ku; ++i) {
+            total_bid += static_cast<double>(state.bid_depths[i]);
+            total_ask += static_cast<double>(state.ask_depths[i]);
+        }
+        const double total = total_bid + total_ask;
+        if (total > 0.0) {
+            const double imbalance = (total_bid - total_ask) / total;  // [-1, 1]
+            exec_imb_buy = 1.0 + iS * std::max(-imbalance, 0.0);   // boost when ask-heavy
+            exec_imb_sell = 1.0 + iS * std::max(imbalance, 0.0);    // boost when bid-heavy
+        }
+    }
+
+    exec_buy = params_.lambda_M_buy.value(state.ask_depths[0]) * exec_spread_mult * exec_imb_buy;
+    exec_sell = params_.lambda_M_sell.value(state.bid_depths[0]) * exec_spread_mult * exec_imb_sell;
     last_per_level_[4 * ku] = exec_buy;
     last_per_level_[4 * ku + 1] = exec_sell;
 

@@ -21,6 +21,7 @@ _deps/
 *.swo
 *~
 .DS_Store
+imgui.ini
 
 # Compiled binaries
 *.exe

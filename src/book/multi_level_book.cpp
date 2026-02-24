@@ -64,16 +64,28 @@ BookFeatures MultiLevelBook::features() const {
 void MultiLevelBook::apply(const SimEvent& e) {
     switch (e.type) {
         case EventType::ADD_BID: {
-            const int idx = bidIndexForPrice(e.price_ticks);
-            if (idx >= 0 && static_cast<size_t>(idx) < num_levels_) {
-                bid_levels_[static_cast<size_t>(idx)].depth += e.qty;
+            const int32_t best_bid = bid_levels_[0].price_ticks;
+            const int32_t best_ask = ask_levels_[0].price_ticks;
+            if (e.price_ticks > best_bid && e.price_ticks < best_ask) {
+                improveBid(e.price_ticks, e.qty);
+            } else {
+                const int idx = bidIndexForPrice(e.price_ticks);
+                if (idx >= 0 && static_cast<size_t>(idx) < num_levels_) {
+                    bid_levels_[static_cast<size_t>(idx)].depth += e.qty;
+                }
             }
             break;
         }
         case EventType::ADD_ASK: {
-            const int idx = askIndexForPrice(e.price_ticks);
-            if (idx >= 0 && static_cast<size_t>(idx) < num_levels_) {
-                ask_levels_[static_cast<size_t>(idx)].depth += e.qty;
+            const int32_t best_bid = bid_levels_[0].price_ticks;
+            const int32_t best_ask = ask_levels_[0].price_ticks;
+            if (e.price_ticks < best_ask && e.price_ticks > best_bid) {
+                improveAsk(e.price_ticks, e.qty);
+            } else {
+                const int idx = askIndexForPrice(e.price_ticks);
+                if (idx >= 0 && static_cast<size_t>(idx) < num_levels_) {
+                    ask_levels_[static_cast<size_t>(idx)].depth += e.qty;
+                }
             }
             break;
         }
@@ -179,9 +191,6 @@ void MultiLevelBook::shiftBidBook() {
             bid_levels_[num_levels_ - 1].price_ticks = bid_levels_[num_levels_ - 2].price_ticks - 1;
             bid_levels_[num_levels_ - 1].depth = initial_depth_;
         }
-        for (size_t k = 0; k < num_levels_; ++k) {
-            ask_levels_[k].price_ticks -= 1;
-        }
         if (bid_levels_[0].depth > 0) break;
     }
 }
@@ -199,11 +208,24 @@ void MultiLevelBook::shiftAskBook() {
             ask_levels_[num_levels_ - 1].price_ticks = ask_levels_[num_levels_ - 2].price_ticks + 1;
             ask_levels_[num_levels_ - 1].depth = initial_depth_;
         }
-        for (size_t k = 0; k < num_levels_; ++k) {
-            bid_levels_[k].price_ticks += 1;
-        }
         if (ask_levels_[0].depth > 0) break;
     }
+}
+
+void MultiLevelBook::improveBid(int32_t price, uint32_t qty) {
+    for (size_t i = num_levels_ - 1; i > 0; --i) {
+        bid_levels_[i] = bid_levels_[i - 1];
+    }
+    bid_levels_[0].price_ticks = price;
+    bid_levels_[0].depth = qty;
+}
+
+void MultiLevelBook::improveAsk(int32_t price, uint32_t qty) {
+    for (size_t i = num_levels_ - 1; i > 0; --i) {
+        ask_levels_[i] = ask_levels_[i - 1];
+    }
+    ask_levels_[0].price_ticks = price;
+    ask_levels_[0].depth = qty;
 }
 
 void MultiLevelBook::reinitialize(IRng& rng, double depth_mean) {

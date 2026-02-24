@@ -1,11 +1,14 @@
 #pragma once
 
 #include "core/records.h"
+#include "model/hlr_params.h"
 #include <cstdint>
 #include <string>
 #include <vector>
 
 namespace qrsdp {
+
+enum class ModelType { SIMPLE, HLR };
 
 struct SecurityConfig {
     std::string symbol;
@@ -16,6 +19,7 @@ struct SecurityConfig {
     uint32_t initial_depth;
     IntensityParams intensity_params;
     QueueReactiveParams queue_reactive;
+    ModelType model_type = ModelType::SIMPLE;
 };
 
 struct RunConfig {
@@ -30,6 +34,8 @@ struct RunConfig {
     uint32_t initial_depth;
     IntensityParams intensity_params;
     QueueReactiveParams queue_reactive;
+    ModelType model_type = ModelType::SIMPLE;
+    HLRParams hlr_params;          // used when model_type == HLR; if !hasCurves(), use defaults
     uint32_t num_days;
     uint32_t chunk_capacity;    // 0 = use default (4096)
     std::string start_date;     // "YYYY-MM-DD"

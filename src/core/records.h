@@ -33,6 +33,7 @@ struct IntensityParams {
     double imbalance_sensitivity;
     double cancel_sensitivity;
     double epsilon_exec;  // baseline execution intensity when imbalance ~ 0 (default 0.05)
+    double spread_sensitivity;  // spread-dependent feedback: >0 boosts adds & dampens execs when spread widens (0 = off)
 };
 
 /// HLR2014 Model III queue-reactive: optional reinit after shift.

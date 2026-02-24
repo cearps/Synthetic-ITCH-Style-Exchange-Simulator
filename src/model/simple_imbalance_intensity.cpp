@@ -23,9 +23,6 @@ Intensities SimpleImbalanceIntensity::compute(const BookState& state) const {
     const BookFeatures& f = state.features;
     const double I = std::isnan(f.imbalance) ? 0.0 : f.imbalance;
 
-    // Use total depth across all levels so the effective per-level cancel rate
-    // (after the attribute sampler distributes proportional to depth) matches
-    // base_C * q_level for each level.
     double total_bid_depth = 0.0;
     double total_ask_depth = 0.0;
     for (auto d : state.bid_depths) total_bid_depth += static_cast<double>(d);
@@ -36,11 +33,18 @@ Intensities SimpleImbalanceIntensity::compute(const BookState& state) const {
     const double sI = (params_.imbalance_sensitivity > 0.0) ? params_.imbalance_sensitivity : 1.0;
     const double sC = (params_.cancel_sensitivity > 0.0) ? params_.cancel_sensitivity : 1.0;
 
-    const double add_bid = params_.base_L * (1.0 - sI * I);
-    const double add_ask = params_.base_L * (1.0 + sI * I);
+    // Spread-dependent feedback: wide spread attracts limit orders, dampens executions.
+    // Uses exp(±sS * (spread - 2)) so that spread=2 is neutral (multiplier=1).
+    const double sS = params_.spread_sensitivity;
+    const double spread_delta = static_cast<double>(f.spread_ticks) - 2.0;
+    const double add_spread_mult = (sS > 0.0) ? std::exp(sS * spread_delta) : 1.0;
+    const double exec_spread_mult = (sS > 0.0) ? std::exp(-sS * spread_delta) : 1.0;
+
+    const double add_bid = params_.base_L * (1.0 - sI * I) * add_spread_mult;
+    const double add_ask = params_.base_L * (1.0 + sI * I) * add_spread_mult;
     const double eps_exec = (params_.epsilon_exec > 0.0) ? params_.epsilon_exec : 0.05;
-    const double exec_sell = params_.base_M * (eps_exec + std::max(sI * I, 0.0));
-    const double exec_buy = params_.base_M * (eps_exec + std::max(-sI * I, 0.0));
+    const double exec_sell = params_.base_M * (eps_exec + std::max(sI * I, 0.0)) * exec_spread_mult;
+    const double exec_buy = params_.base_M * (eps_exec + std::max(-sI * I, 0.0)) * exec_spread_mult;
     const double cancel_bid = params_.base_C * sC * total_bid_depth;
     const double cancel_ask = params_.base_C * sC * total_ask_depth;
 

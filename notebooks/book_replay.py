@@ -80,8 +80,6 @@ class _MiniBook:
                     self.bids[i].depth = self.bids[i + 1].depth
                 self.bids[-1].price = self.bids[-2].price - 1
                 self.bids[-1].depth = self.initial_depth
-            for lev in self.asks:
-                lev.price -= 1
             if self.bids[0].depth > 0:
                 break
 
@@ -96,21 +94,43 @@ class _MiniBook:
                     self.asks[i].depth = self.asks[i + 1].depth
                 self.asks[-1].price = self.asks[-2].price + 1
                 self.asks[-1].depth = self.initial_depth
-            for lev in self.bids:
-                lev.price += 1
             if self.asks[0].depth > 0:
                 break
 
+    def _improve_bid(self, price, qty):
+        for i in range(self.num_levels - 1, 0, -1):
+            self.bids[i].price = self.bids[i - 1].price
+            self.bids[i].depth = self.bids[i - 1].depth
+        self.bids[0].price = price
+        self.bids[0].depth = qty
+
+    def _improve_ask(self, price, qty):
+        for i in range(self.num_levels - 1, 0, -1):
+            self.asks[i].price = self.asks[i - 1].price
+            self.asks[i].depth = self.asks[i - 1].depth
+        self.asks[0].price = price
+        self.asks[0].depth = qty
+
     def apply(self, event_type: int, price: int, qty: int):
         if event_type == ADD_BID:
-            idx = self._bid_index(price)
-            if 0 <= idx < self.num_levels:
-                self.bids[idx].depth += qty
+            best_bid = self.bids[0].price if self.bids else 0
+            best_ask = self.asks[0].price if self.asks else 0
+            if price > best_bid and price < best_ask:
+                self._improve_bid(price, qty)
+            else:
+                idx = self._bid_index(price)
+                if 0 <= idx < self.num_levels:
+                    self.bids[idx].depth += qty
 
         elif event_type == ADD_ASK:
-            idx = self._ask_index(price)
-            if 0 <= idx < self.num_levels:
-                self.asks[idx].depth += qty
+            best_bid = self.bids[0].price if self.bids else 0
+            best_ask = self.asks[0].price if self.asks else 0
+            if price < best_ask and price > best_bid:
+                self._improve_ask(price, qty)
+            else:
+                idx = self._ask_index(price)
+                if 0 <= idx < self.num_levels:
+                    self.asks[idx].depth += qty
 
         elif event_type == CANCEL_BID:
             idx = self._bid_index(price)

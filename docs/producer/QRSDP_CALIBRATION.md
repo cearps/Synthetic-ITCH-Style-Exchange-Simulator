@@ -6,39 +6,92 @@ This document describes the **calibration module** for HLR2014-style intensity e
 
 ## 1. Overview
 
-The scaffold supports calibration from **simulated** event streams today:
+The scaffold supports calibration from **simulated** event streams:
 
-1. **Calibration from simulator** — replay `EventRecord`s through a `MultiLevelBook`; at each event you have the book state (queue sizes) and can record sojourns for the estimator. No separate event-log parser is needed.
-2. **IntensityEstimator** — accumulate sojourn data (queue size, dwell time, event type) and compute MLE intensity estimates.
-3. **Curve JSON I/O** — save and load `IntensityCurve` tables to/from JSON for use in `CurveIntensityModel` / `HLRParams`.
+1. **Calibration CLI** (`qrsdp_calibrate`) — reads `.qrsdp` event log files, replays through a `MultiLevelBook`, records per-level sojourns, estimates intensity curves via MLE, and saves a complete `HLRParams` JSON file.
+2. **IntensityEstimator** — accumulates sojourn data (queue size, dwell time, event type) and computes MLE intensity estimates.
+3. **HLR Params JSON I/O** — save and load full `HLRParams` (all per-level curves + metadata) to/from a single JSON file.
+4. **Curve JSON I/O** — save and load individual `IntensityCurve` tables.
 
-**Location:** `src/qrsdp/intensity_estimator.*`, `intensity_curve_io.*`
-
-When we add support for **external** event logs (e.g. ITCH), we will introduce an event-log parser that reconstructs queue state from the raw stream; until then, calibration uses replay + book state only.
-
----
-
-## 2. Calibration from simulator: replay + book state
-
-When the event stream comes from our own producer (e.g. `InMemorySink` of `EventRecord`s), you already have a way to get queue state: **replay the same events through a `MultiLevelBook`** (or the same book).
-
-### Pipeline
-
-1. Run a session: producer writes `EventRecord`s to `InMemorySink`.
-2. Replay: seed a `MultiLevelBook` with the same `BookSeed`, then for each record in order:
-   - You have **queue state before the event** (from the book: `bidDepthAtLevel(k)`, `askDepthAtLevel(k)`).
-   - You have **time** from the previous record (or session start) so you can compute **dwell time** Δt at that state.
-   - Build a `SimEvent` from the record and **apply** it to the book.
-   - The **event type** is in the record.
-3. For each event, record a sojourn: queue size **n** (e.g. at best level), **Δt** since last event, and **type** that occurred. Feed these into `IntensityEstimator::recordSojourn(n, dt, type)`.
-
-No separate “parser” that reconstructs the book from the log is required—the book *is* the state. An event-log parser will be added when we support **external** feeds (e.g. ITCH) where we only have the event stream and must reconstruct the book.
+**Location:** `src/calibration/`, `src/model/hlr_params.*`
 
 ---
 
-## 3. Intensity estimator
+## 2. Quick Start: End-to-End Calibration
 
-**Header:** `src/qrsdp/intensity_estimator.h`
+### Step 1: Generate simple-model training data
+
+```bash
+./build/qrsdp_run --seed 100 --days 5 --seconds 3600 \
+    --model simple --output output/cal_training
+```
+
+### Step 2: Calibrate HLR curves
+
+```bash
+./build/qrsdp_calibrate \
+    --input output/cal_training/2026-01-02.qrsdp \
+    --input output/cal_training/2026-01-05.qrsdp \
+    --input output/cal_training/2026-01-06.qrsdp \
+    --input output/cal_training/2026-01-07.qrsdp \
+    --input output/cal_training/2026-01-08.qrsdp \
+    --output output/cal_training/hlr_curves.json \
+    --verbose
+```
+
+### Step 3: Run HLR with calibrated curves
+
+```bash
+./build/qrsdp_run --seed 200 --days 5 --seconds 23400 \
+    --hlr-curves output/cal_training/hlr_curves.json \
+    --output output/hlr_calibrated
+```
+
+The `--hlr-curves` flag auto-switches to `--model hlr` if not already set.
+
+---
+
+## 3. Calibration CLI: `qrsdp_calibrate`
+
+```
+Usage: qrsdp_calibrate [options]
+  --input <file>       Input .qrsdp file (may be repeated)
+  --output <file>      Output JSON curves file (default: hlr_curves.json)
+  --levels <K>         Levels per side for curves (default: from file header)
+  --n-max <n>          Max queue size for tables (default: 100)
+  --spread-sens <f>    Spread sensitivity for output (default: 0.3)
+  --verbose            Print per-level summaries
+```
+
+### How it works
+
+For each input file, the tool:
+
+1. Reads the `.qrsdp` file header to get book configuration (p0, levels, initial depth).
+2. Seeds a `MultiLevelBook` with those parameters.
+3. For each event record in order:
+   - Maps the event to a `(level, side)` pair by matching the event price to book levels.
+   - Computes the dwell time since the last event at that level.
+   - Records a sojourn `(queue_depth, dt, event_type)` into the per-level `IntensityEstimator`.
+   - Applies the event to the book.
+   - On price shifts (best bid/ask change), re-snapshots all level trackers to handle index renumbering.
+4. After all events, extracts per-level/type intensity curves from the estimators.
+5. Saves the complete `HLRParams` as a single JSON file.
+
+### Per-level estimator design
+
+Each `(level, side)` pair gets its own `IntensityEstimator`. The event types recorded are:
+
+- **Bid level k**: `ADD_BID`, `CANCEL_BID`, and `EXECUTE_SELL` (at level 0 only)
+- **Ask level k**: `ADD_ASK`, `CANCEL_ASK`, and `EXECUTE_BUY` (at level 0 only)
+
+This decomposition yields separate `λ^L_i(n)`, `λ^C_i(n)`, and `λ^M(n)` curves for each level.
+
+---
+
+## 4. Intensity estimator
+
+**Header:** `src/calibration/intensity_estimator.h`
 
 Implements the HLR MLE idea: estimate total intensity and type-specific intensities from sojourns (queue size, dwell time, and the event type that ended the sojourn).
 
@@ -57,34 +110,95 @@ Implements the HLR MLE idea: estimate total intensity and type-specific intensit
 | `lambdaType(n, type)` | λ̂_type(n). Returns 0 if no observations. |
 | `nMaxObserved()` | Largest n with at least one observation. |
 
-### Usage sketch (replay)
+---
 
-```cpp
-qrsdp::IntensityEstimator est;
-est.reset();
-// Replay: for each EventRecord (after applying previous), you have book state and dt
-double t_prev = 0.0;
-for (const auto& rec : sink.events()) {
-    double t = rec.ts_ns * 1e-9;
-    double dt = t - t_prev;
-    uint32_t n = book.bidDepthAtLevel(0);  // e.g. best bid queue size
-    est.recordSojourn(n, dt, static_cast<EventType>(rec.type));
-    // apply rec to book, then ...
-    t_prev = t;
+## 5. HLR Params JSON format and I/O
+
+**Header:** `src/model/hlr_params.h`
+
+### JSON format
+
+A complete HLR parameter set is stored as:
+
+```json
+{
+  "K": 5,
+  "n_max": 100,
+  "spread_sensitivity": 0.3,
+  "lambda_L_bid": [
+    [v0, v1, v2, ...],
+    [v0, v1, v2, ...]
+  ],
+  "lambda_L_ask": [ ... ],
+  "lambda_C_bid": [ ... ],
+  "lambda_C_ask": [ ... ],
+  "lambda_M_buy": [v0, v1, v2, ...],
+  "lambda_M_sell": [v0, v1, v2, ...]
 }
-double lambda_tot = est.lambdaTotal(n);
-double lambda_add = est.lambdaType(n, EventType::ADD_BID);
 ```
 
-You can then build an `IntensityCurve` from the estimates (e.g. for n = 0 .. nMaxObserved()) and pass it into `HLRParams` or save via curve JSON I/O.
+- **K** — number of levels per side.
+- **n_max** — max queue size for table entries.
+- **spread_sensitivity** — spread-dependent feedback strength (see below).
+- **lambda_L_\*** — per-level add intensity curves (array of K arrays).
+- **lambda_C_\*** — per-level cancel intensity curves.
+- **lambda_M_\*** — market order intensity curves (single arrays).
+
+### API
+
+| Function | Purpose |
+|----------|--------|
+| `saveHLRParamsToJson(path, params)` | Save complete HLRParams to JSON. |
+| `loadHLRParamsFromJson(path, params)` | Load HLRParams from JSON. |
+
+### Example: save calibrated curves
+
+```cpp
+qrsdp::HLRParams p;
+// ... populate from IntensityEstimator ...
+qrsdp::saveHLRParamsToJson("hlr_curves.json", p);
+```
+
+### Example: load and use
+
+```cpp
+qrsdp::HLRParams p;
+if (qrsdp::loadHLRParamsFromJson("hlr_curves.json", p)) {
+    auto model = std::make_unique<CurveIntensityModel>(std::move(p));
+}
+```
 
 ---
 
-## 4. Curve JSON format and I/O
+## 6. Spread-dependent feedback
 
-**Header:** `src/qrsdp/intensity_curve_io.h`
+The `CurveIntensityModel` now applies spread-dependent multipliers (controlled by `spread_sensitivity`):
 
-### JSON format
+- **Add multiplier** = exp(sS × (spread − 2)): wide spread → more limit orders (price improvement).
+- **Exec multiplier** = exp(−sS × (spread − 2)): wide spread → fewer market orders.
+
+Neutral at spread=2 ticks (one tick each side of mid). Default sS=0.3. This mirrors the `SimpleImbalanceIntensity` spread feedback.
+
+---
+
+## 7. Default HLR curves
+
+`makeDefaultHLRParams()` produces hand-tuned starter curves:
+
+| Curve | Shape | Rationale |
+|-------|-------|-----------|
+| addBest(n) | 30 at n=0, 25 flat | Strong refill when empty, high steady-state |
+| addDeeper(n) | 18/(1+0.08n) | Moderate, slowly decaying |
+| cancelCurve(n) | 0.5n | Linear per-order cancellation, softer than 0.8n |
+| marketCurve(n) | 0 at n=0, 18/(1+0.03n) | No phantom executions on empty, strong pressure |
+
+Steady-state best-level depth ≈ 25–30. Market rate at steady state ≈ 11–12 per side.
+
+---
+
+## 8. Individual Curve JSON I/O
+
+**Header:** `src/calibration/intensity_curve_io.h`
 
 A single curve is stored as:
 
@@ -92,59 +206,30 @@ A single curve is stored as:
 {"values": [v0, v1, v2, ...], "tail": "FLAT"}
 ```
 
-or
-
-```json
-{"values": [v0, v1, ...], "tail": "ZERO"}
-```
-
-- **values** — array of nonnegative numbers; index i corresponds to queue size n = i (0, 1, 2, …).
-- **tail** — behaviour for n > last index: `"FLAT"` uses the last value; `"ZERO"` uses 0.
-
-### API
-
 | Function | Purpose |
 |----------|--------|
-| `saveCurveToJson(path, curve)` | Write the curve’s table and tail rule to a JSON file. Returns `false` on I/O error or if curve is empty. |
-| `loadCurveFromJson(path, curve)` | Read JSON from `path`, set curve via `setTable(...)` and tail. Returns `false` on error. |
-
-### Example: save default HLR curves
-
-```cpp
-#include "qrsdp/hlr_params.h"
-#include "qrsdp/intensity_curve_io.h"
-
-qrsdp::HLRParams p = qrsdp::makeDefaultHLRParams(5, 100);
-qrsdp::saveCurveToJson("lambda_M_buy.json", p.lambda_M_buy);
-```
-
-### Example: load a curve into HLRParams
-
-```cpp
-qrsdp::IntensityCurve curve;
-if (qrsdp::loadCurveFromJson("calibrated_add_best.json", curve)) {
-    p.lambda_L_bid[0] = std::move(curve);
-}
-```
-
-No external JSON library is used; the implementation uses minimal in-repo parsing and formatting.
+| `saveCurveToJson(path, curve)` | Save one curve to JSON. |
+| `loadCurveFromJson(path, curve)` | Load one curve from JSON. |
 
 ---
 
-## 5. Tests
+## 9. Tests
 
 **File:** `tests/qrsdp/test_calibration.cpp`
 
-- **IntensityEstimator.LambdaTotalAndType** — record sojourns at n=5, check Λ̂(5) and λ̂_type(5).
-- **IntensityCurveIo.SaveAndLoad** — save a 3-point curve to JSON, load it back, check values and nMax().
+- **IntensityEstimator.LambdaTotalAndType** — record sojourns at n=5, verify Λ̂(5) and λ̂_type(5).
+- **IntensityCurveIo.SaveAndLoad** — save a 3-point curve to JSON, load it back, verify values.
+- **HLRParamsIo.SaveAndLoadRoundTrip** — save full default HLRParams, load back, verify all curves match.
+- **HLRParamsIo.LoadBadPathFails** — loading nonexistent file returns false.
+- **HLRParams.DefaultsHaveSpreadSensitivity** — verify defaults have spread_sensitivity=0.3 and marketCurve(0)=0.
 
-Run the full test suite (e.g. `ctest` or the `tests` target) to execute these.
+Run: `ctest` or the `tests` target.
 
 ---
 
-## 6. Roadmap (for later)
+## 10. Roadmap
 
-- **Event-log parser:** when adding ITCH (or similar) support, introduce a parser that reconstructs queue state from the raw event stream so we can calibrate from external data without replaying through our book.
-- **IntensityEstimator:** optional weighting (e.g. by time of day), per-level curves (bid/ask, level index).
-- **Curve I/O:** optional HLRParams-level JSON (all curves for one symbol/side), validation and schema hints.
-- **Calibration pipeline:** replay EventRecord stream → book state + sojourn extraction → IntensityEstimator → export curves to JSON → load into `CurveIntensityModel` for simulation. (For external logs: event parser → reconstructed state + sojourns → same pipeline.)
+- **Smoothing/regularization:** kernel smoothing or parametric fitting to reduce noise in estimated curves from limited data.
+- **Event-log parser:** when adding ITCH support, introduce a parser that reconstructs queue state from raw feeds.
+- **Multi-security calibration:** calibrate per-security curves from multi-security runs.
+- **Time-of-day weighting:** optional intraday weighting in the estimator.

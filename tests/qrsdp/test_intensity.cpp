@@ -7,7 +7,7 @@ namespace qrsdp {
 namespace test {
 
 TEST(QrsdpIntensity, AllIntensitiesNonNegative) {
-    IntensityParams p{10.0, 0.1, 5.0, 1.0, 1.0, 0.05};
+    IntensityParams p{10.0, 0.1, 5.0, 1.0, 1.0, 0.05, 0.0};
     SimpleImbalanceIntensity model(p);
 
     BookState state;
@@ -23,7 +23,7 @@ TEST(QrsdpIntensity, AllIntensitiesNonNegative) {
 }
 
 TEST(QrsdpIntensity, BalancedBookGivesSymmetricAdds) {
-    IntensityParams p{20.0, 0.1, 5.0, 1.0, 1.0, 0.05};
+    IntensityParams p{20.0, 0.1, 5.0, 1.0, 1.0, 0.05, 0.0};
     SimpleImbalanceIntensity model(p);
     BookState state;
     state.features = BookFeatures{9999, 10001, 50, 50, 2, 0.0};
@@ -32,7 +32,7 @@ TEST(QrsdpIntensity, BalancedBookGivesSymmetricAdds) {
 }
 
 TEST(QrsdpIntensity, PositiveImbalanceIncreasesAddAskDecreasesAddBid) {
-    IntensityParams p{20.0, 0.1, 5.0, 1.0, 1.0, 0.05};
+    IntensityParams p{20.0, 0.1, 5.0, 1.0, 1.0, 0.05, 0.0};
     SimpleImbalanceIntensity model(p);
     BookState stateBal, stateBid;
     stateBal.features = BookFeatures{9999, 10001, 50, 50, 2, 0.0};
@@ -44,7 +44,7 @@ TEST(QrsdpIntensity, PositiveImbalanceIncreasesAddAskDecreasesAddBid) {
 }
 
 TEST(QrsdpIntensity, CancelProportionalToQueueSize) {
-    IntensityParams p{10.0, 0.5, 5.0, 1.0, 1.0, 0.05};
+    IntensityParams p{10.0, 0.5, 5.0, 1.0, 1.0, 0.05, 0.0};
     SimpleImbalanceIntensity model(p);
     BookState stateSmall, stateLarge;
     stateSmall.features = BookFeatures{9999, 10001, 10, 10, 2, 0.0};
@@ -56,7 +56,7 @@ TEST(QrsdpIntensity, CancelProportionalToQueueSize) {
 }
 
 TEST(QrsdpIntensity, NoNanForExtremeImbalance) {
-    IntensityParams p{10.0, 0.1, 5.0, 1.0, 1.0, 0.05};
+    IntensityParams p{10.0, 0.1, 5.0, 1.0, 1.0, 0.05, 0.0};
     SimpleImbalanceIntensity model(p);
     BookState state;
     state.features = BookFeatures{9999, 10001, 1, 99, 2, 0.98};
@@ -67,7 +67,7 @@ TEST(QrsdpIntensity, NoNanForExtremeImbalance) {
 }
 
 TEST(QrsdpIntensity, InterfaceComputeBookState) {
-    IntensityParams p{10.0, 0.1, 5.0, 1.0, 1.0, 0.05};
+    IntensityParams p{10.0, 0.1, 5.0, 1.0, 1.0, 0.05, 0.0};
     SimpleImbalanceIntensity impl(p);
     IIntensityModel& model = impl;
     BookState state;
