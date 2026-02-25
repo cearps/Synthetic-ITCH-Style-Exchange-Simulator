@@ -51,3 +51,42 @@ SELECT
     _key AS symbol,
     toDate(_timestamp) AS date
 FROM exchange_events_kafka;
+
+-- ── Best-bid/offer tracking (trade-implied) ────────────────────────
+-- Execution events reveal the BBO at the moment of the trade:
+--   EXECUTE_BUY  (4) fills at the best ask
+--   EXECUTE_SELL (5) fills at the best bid
+-- An AggregatingMergeTree keeps the latest value per symbol with
+-- near-zero query cost (just reads the pre-aggregated state).
+
+CREATE TABLE IF NOT EXISTS current_bbo (
+    symbol   LowCardinality(String),
+    last_bid AggregateFunction(argMax, Int32, UInt64),
+    last_ask AggregateFunction(argMax, Int32, UInt64)
+) ENGINE = AggregatingMergeTree()
+ORDER BY symbol;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS current_bbo_mv TO current_bbo AS
+SELECT
+    _key AS symbol,
+    argMaxState(
+        if(type = 5, price_ticks, toInt32(-2147483648)),
+        if(type = 5, ts_ns, toUInt64(0))
+    ) AS last_bid,
+    argMaxState(
+        if(type = 4, price_ticks, toInt32(2147483647)),
+        if(type = 4, ts_ns, toUInt64(0))
+    ) AS last_ask
+FROM exchange_events_kafka
+WHERE type IN (4, 5)
+GROUP BY _key;
+
+CREATE VIEW IF NOT EXISTS v_current_midprice AS
+SELECT
+    symbol,
+    argMaxMerge(last_bid) AS best_bid_ticks,
+    argMaxMerge(last_ask) AS best_ask_ticks,
+    (argMaxMerge(last_bid) + argMaxMerge(last_ask)) / 2.0 AS midprice_ticks
+FROM current_bbo
+GROUP BY symbol
+HAVING best_bid_ticks > -2147483648 AND best_ask_ticks < 2147483647;

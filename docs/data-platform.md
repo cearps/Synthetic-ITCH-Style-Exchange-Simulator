@@ -104,6 +104,16 @@ Three database objects handle the entire ingestion:
    on arrival — maps type codes to names via `multiIf`, extracts `symbol`
    from the Kafka message key (`_key`), and `date` from the broker timestamp.
 
+4. **`current_bbo`** (AggregatingMergeTree): maintains the latest trade-implied
+   best bid and ask per symbol. Updated incrementally by `current_bbo_mv`
+   which processes only execution events (type 4 = EXECUTE_BUY → best ask,
+   type 5 = EXECUTE_SELL → best bid). Uses `argMaxState` so the query cost
+   is O(1) regardless of total event count.
+
+5. **`v_current_midprice`** (View): convenience layer over `current_bbo` that
+   merges the aggregate state and returns `best_bid_ticks`, `best_ask_ticks`,
+   and `midprice_ticks` per symbol. Query with `SELECT * FROM v_current_midprice`.
+
 The init SQL is in `pipeline/clickhouse/init.sql`, templated by `init.sh`
 which substitutes `${KAFKA_BROKERS}` and `${KAFKA_TOPIC}` at startup.
 
@@ -135,8 +145,12 @@ Data is queryable the moment it arrives.
 # client = clickhouse_connect.get_client(host='localhost', port=8123)
 # client.query_df("SELECT * FROM exchange_events LIMIT 10")
 
+# Current midprice per symbol (near-instant, reads pre-aggregated state):
+# client.query_df("SELECT * FROM v_current_midprice")
+
 # Or use the ClickHouse HTTP API:
 curl 'http://localhost:8123/?query=SELECT+count()+FROM+exchange_events'
+curl 'http://localhost:8123/?query=SELECT+*+FROM+v_current_midprice'
 ```
 
 ### Stop the platform
