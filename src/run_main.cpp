@@ -30,7 +30,14 @@ static void printUsage(const char* prog) {
         "  --cancel-sens <f>   Cancel sensitivity (default: 1.0)\n"
         "  --epsilon-exec <f>  Baseline exec intensity near zero imbalance (default: 0.5)\n"
         "  --spread-sens <f>   Spread-dependent feedback strength (default: 0.4)\n"
-        "  --help              Show this help\n",
+        "  --kafka-brokers <s> Kafka bootstrap servers (e.g. kafka:9092; empty = no Kafka)\n"
+        "  --kafka-topic <s>   Kafka topic name (default: exchange.events)\n"
+        "  --realtime          Pace events to simulated inter-arrival times\n"
+        "  --speed <f>         Speed multiplier for real-time mode (default: 100.0)\n"
+        "                      100 = 6.5h session in ~4 min; 1 = actual real time\n"
+        "  --help              Show this help\n"
+        "\n"
+        "Use --days 0 for continuous mode (runs indefinitely until SIGTERM).\n",
         prog);
 }
 
@@ -84,6 +91,10 @@ int main(int argc, char* argv[]) {
     std::string securities_spec;
     std::string model_str = "simple";
     std::string hlr_curves_path;
+    std::string kafka_brokers;
+    std::string kafka_topic = "exchange.events";
+    bool realtime = false;
+    double speed = 100.0;
     double base_L = 20.0;
     double base_C = 0.5;
     double base_M = 15.0;
@@ -115,6 +126,10 @@ int main(int argc, char* argv[]) {
         else if (std::strcmp(arg, "--securities") == 0) securities_spec = next();
         else if (std::strcmp(arg, "--model") == 0)      model_str = next();
         else if (std::strcmp(arg, "--hlr-curves") == 0) hlr_curves_path = next();
+        else if (std::strcmp(arg, "--kafka-brokers") == 0) kafka_brokers = next();
+        else if (std::strcmp(arg, "--kafka-topic") == 0)   kafka_topic = next();
+        else if (std::strcmp(arg, "--realtime") == 0)       realtime = true;
+        else if (std::strcmp(arg, "--speed") == 0)          speed = std::atof(next());
         else if (std::strcmp(arg, "--base-L") == 0)     base_L = std::atof(next());
         else if (std::strcmp(arg, "--base-C") == 0)     base_C = std::atof(next());
         else if (std::strcmp(arg, "--base-M") == 0)     base_M = std::atof(next());
@@ -180,6 +195,11 @@ int main(int argc, char* argv[]) {
     config.chunk_capacity = chunk_size;
     config.start_date = start_date;
 
+    config.kafka_brokers = kafka_brokers;
+    config.kafka_topic = kafka_topic;
+    config.realtime = realtime;
+    config.speed = speed;
+
     if (!securities_spec.empty()) {
         config.securities = parseSecurities(
             securities_spec.c_str(),
@@ -204,7 +224,18 @@ int main(int argc, char* argv[]) {
             std::printf(" %s:%d", s.symbol.c_str(), s.p0_ticks);
         std::printf("\n");
     }
+    if (!config.kafka_brokers.empty()) {
+        std::printf("kafka: %s  topic=%s\n",
+                    config.kafka_brokers.c_str(), config.kafka_topic.c_str());
+    }
+    if (config.realtime) {
+        std::printf("realtime: speed=%.0fx\n", config.speed);
+    }
+    if (config.num_days == 0) {
+        std::printf("continuous mode: will run indefinitely (SIGTERM to stop)\n");
+    }
 
+    qrsdp::installShutdownHandler();
     qrsdp::SessionRunner runner;
     qrsdp::RunResult result = runner.run(config);
 

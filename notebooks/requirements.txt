@@ -6,3 +6,5 @@ ipywidgets>=8.0
 anywidget
 scipy
 jupyter
+clickhouse-connect
+matplotlib

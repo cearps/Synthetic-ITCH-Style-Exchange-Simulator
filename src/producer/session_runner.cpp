@@ -1,6 +1,7 @@
 #include "producer/session_runner.h"
 #include "producer/qrsdp_producer.h"
 #include "io/binary_file_sink.h"
+#include "io/multiplex_sink.h"
 #include "io/event_log_reader.h"
 #include "io/event_log_format.h"
 #include "book/multi_level_book.h"
@@ -11,6 +12,12 @@
 #include "sampler/competing_intensity_sampler.h"
 #include "sampler/unit_size_attribute_sampler.h"
 
+#ifdef QRSDP_KAFKA_ENABLED
+#include "io/kafka_sink.h"
+#endif
+
+#include <atomic>
+#include <csignal>
 #include <memory>
 
 #include <chrono>
@@ -21,6 +28,21 @@
 #include <thread>
 
 namespace qrsdp {
+
+// ---------------------------------------------------------------------------
+// Graceful shutdown on SIGTERM / SIGINT
+// ---------------------------------------------------------------------------
+
+static std::atomic<bool> g_shutdown_requested{false};
+
+static void signalHandler(int /*sig*/) {
+    g_shutdown_requested.store(true, std::memory_order_relaxed);
+}
+
+void installShutdownHandler() {
+    std::signal(SIGTERM, signalHandler);
+    std::signal(SIGINT, signalHandler);
+}
 
 // ---------------------------------------------------------------------------
 // Date helpers
@@ -285,7 +307,14 @@ static std::vector<DayResult> runSecurityDays(
     Date current_date = parseDate(config.start_date);
     int32_t next_p0 = p0_ticks;
 
-    for (uint32_t day_idx = 0; day_idx < config.num_days; ++day_idx) {
+    const bool infinite = (config.num_days == 0);
+
+    for (uint32_t day_idx = 0;
+         infinite || day_idx < config.num_days;
+         ++day_idx)
+    {
+        if (g_shutdown_requested.load(std::memory_order_relaxed)) break;
+
         const uint64_t day_seed = base + day_idx;
         const std::string date_str = formatDate(current_date);
         const std::string filename = symbol.empty()
@@ -304,27 +333,74 @@ static std::vector<DayResult> runSecurityDays(
         session.intensity_params = intensity_params;
         session.queue_reactive = queue_reactive;
 
-        BinaryFileSink sink(filepath, session, chunk_cap);
+        BinaryFileSink file_sink(filepath, session, chunk_cap);
+
+#ifdef QRSDP_KAFKA_ENABLED
+        std::unique_ptr<KafkaSink> kafka_sink;
+        MultiplexSink mux_sink;
+        mux_sink.addSink(&file_sink);
+
+        if (!config.kafka_brokers.empty()) {
+            kafka_sink = std::make_unique<KafkaSink>(
+                config.kafka_brokers, config.kafka_topic, symbol);
+            mux_sink.addSink(kafka_sink.get());
+        }
+
+        IEventSink& sink = config.kafka_brokers.empty()
+            ? static_cast<IEventSink&>(file_sink)
+            : static_cast<IEventSink&>(mux_sink);
+#else
+        IEventSink& sink = file_sink;
+#endif
+
+        if (config.realtime) {
+            std::printf("[%s] %s session starting (speed=%.0fx)\n",
+                        symbol.c_str(), date_str.c_str(), config.speed);
+        }
 
         auto t0 = std::chrono::steady_clock::now();
-        SessionResult sr = producer.runSession(session, sink);
-        auto t1 = std::chrono::steady_clock::now();
 
+        producer.startSession(session);
+        auto wall_start = std::chrono::steady_clock::now();
+
+        while (!g_shutdown_requested.load(std::memory_order_relaxed)
+               && producer.stepOneEvent(sink))
+        {
+            if (config.realtime && config.speed > 0.0) {
+                double sim_elapsed = producer.currentTime();
+                double wall_target = sim_elapsed / config.speed;
+                auto wall_elapsed = std::chrono::steady_clock::now() - wall_start;
+                double wall_secs = std::chrono::duration<double>(wall_elapsed).count();
+                if (wall_target > wall_secs) {
+                    std::this_thread::sleep_for(
+                        std::chrono::duration<double>(wall_target - wall_secs));
+                }
+            }
+        }
+
+        const int32_t close_ticks =
+            (book.bestBid().price_ticks + book.bestAsk().price_ticks) / 2;
+        const uint64_t events_written = producer.eventsWrittenThisSession();
+
+        auto t1 = std::chrono::steady_clock::now();
         sink.close();
 
         const double write_secs = std::chrono::duration<double>(t1 - t0).count();
         const uint64_t file_size = static_cast<uint64_t>(fs::file_size(filepath));
 
-        auto r0 = std::chrono::steady_clock::now();
-        {
-            EventLogReader reader(filepath);
-            auto records = reader.readAll();
-            if (records.size() != sr.events_written) {
-                throw std::runtime_error("read-back count mismatch");
+        double read_secs = 0.0;
+        if (!config.realtime) {
+            auto r0 = std::chrono::steady_clock::now();
+            {
+                EventLogReader reader(filepath);
+                auto records = reader.readAll();
+                if (records.size() != events_written) {
+                    throw std::runtime_error("read-back count mismatch");
+                }
             }
+            auto r1 = std::chrono::steady_clock::now();
+            read_secs = std::chrono::duration<double>(r1 - r0).count();
         }
-        auto r1 = std::chrono::steady_clock::now();
-        const double read_secs = std::chrono::duration<double>(r1 - r0).count();
 
         DayResult dr{};
         dr.symbol = symbol;
@@ -332,16 +408,22 @@ static std::vector<DayResult> runSecurityDays(
         dr.filename = filename;
         dr.seed = day_seed;
         dr.open_ticks = next_p0;
-        dr.close_ticks = sr.close_ticks;
-        dr.events_written = sr.events_written;
-        dr.chunks_written = sink.chunksWritten();
+        dr.close_ticks = close_ticks;
+        dr.events_written = events_written;
+        dr.chunks_written = file_sink.chunksWritten();
         dr.file_size_bytes = file_size;
         dr.write_seconds = write_secs;
         dr.read_seconds = read_secs;
 
         days.push_back(dr);
 
-        next_p0 = sr.close_ticks;
+        if (config.realtime) {
+            std::printf("[%s] %s complete: %llu events in %.1fs\n",
+                        symbol.c_str(), date_str.c_str(),
+                        (unsigned long long)events_written, write_secs);
+        }
+
+        next_p0 = close_ticks;
         current_date = nextBusinessDay(current_date);
     }
 

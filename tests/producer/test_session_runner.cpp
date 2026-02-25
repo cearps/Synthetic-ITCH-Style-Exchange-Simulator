@@ -271,13 +271,15 @@ TEST_F(SessionRunnerTest, MultiSecurityRun) {
     int bbb_idx = -1;
     for (size_t i = 0; i < result.days.size(); ++i) {
         if (result.days[i].symbol == "AAA") {
-            if (aaa_idx >= 0)
+            if (aaa_idx >= 0) {
                 EXPECT_EQ(result.days[i].open_ticks, result.days[aaa_idx].close_ticks);
+            }
             aaa_idx = static_cast<int>(i);
         }
         if (result.days[i].symbol == "BBB") {
-            if (bbb_idx >= 0)
+            if (bbb_idx >= 0) {
                 EXPECT_EQ(result.days[i].open_ticks, result.days[bbb_idx].close_ticks);
+            }
             bbb_idx = static_cast<int>(i);
         }
     }

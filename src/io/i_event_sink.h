@@ -4,11 +4,14 @@
 
 namespace qrsdp {
 
-/// Event output. v1: in-memory stub with append only.
+/// Abstract event output interface.
+/// Implementations: BinaryFileSink, InMemorySink, KafkaSink, MultiplexSink.
 class IEventSink {
 public:
     virtual ~IEventSink() = default;
     virtual void append(const EventRecord&) = 0;
+    virtual void flush() {}
+    virtual void close() {}
 };
 
 }  // namespace qrsdp

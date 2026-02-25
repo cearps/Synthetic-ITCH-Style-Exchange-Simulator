@@ -28,11 +28,11 @@ public:
     void append(const EventRecord& rec) override;
 
     /// Flush any buffered records as a partial chunk.
-    void flush();
+    void flush() override;
 
     /// Flush, write chunk index, finalise header flags, close file.
     /// Safe to call multiple times; subsequent calls are no-ops.
-    void close();
+    void close() override;
 
     bool isOpen() const { return file_ != nullptr; }
     uint64_t recordsWritten() const { return total_records_; }

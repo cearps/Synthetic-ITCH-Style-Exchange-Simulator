@@ -1,7 +1,7 @@
 # Dev Week 2 Plan — Data Platform, ITCH Streaming + Producer Improvements
 
 **Duration:** 4 days (Monday–Thursday)
-**Objective:** Build a Kafka-based event distribution layer with dual-write from the C++ producer, a Parquet analytics landing zone with dbt, an ITCH 5.0 UDP multicast feed served from Kafka, then add Hawkes self-exciting and correlated multi-security intensity models.
+**Objective:** Build a Kafka-based event distribution layer with dual-write from the C++ producer, a ClickHouse analytics store with native Kafka ingestion and dbt, an ITCH 5.0 UDP multicast feed served from Kafka, then add Hawkes self-exciting and correlated multi-security intensity models.
 
 ---
 
@@ -57,28 +57,27 @@ The following was delivered in Week 1 and is complete, tested, and committed:
                     ┌─────────┼─────────┐
                     │                    │
                     ▼                    ▼
-          Parquet Consumer       ITCH Stream Consumer
-          (Python)               (C++, Kafka consumer)
-                    │                    │
-                    ▼                    ▼
-          MinIO / S3             ITCH 5.0 + MoldUDP64
-          (Parquet files)              │
+          ClickHouse             ITCH Stream Consumer
+          (Kafka engine →        (C++, Kafka consumer)
+           MergeTree)                    │
+                    │                    ▼
+                    ▼            ITCH 5.0 + MoldUDP64
+          dbt-clickhouse               │
                     │                  ▼
                     ▼           UDP Multicast (239.1.1.1)
-          dbt + DuckDB                 │
-                    │                  ▼
-                    ▼           qrsdp_listen
-          Mart tables           (reference decoder)
-          (OHLCV, stats)
+          Mart tables                  │
+          (OHLCV, stats)               ▼
+                               qrsdp_listen
+                               (reference decoder)
 ```
 
-**Design principle (mirrors real exchange architecture):** The producer writes to a local journal (`.qrsdp`) and a distribution layer (Kafka) simultaneously via MultiplexSink. The `.qrsdp` file and Kafka are independent — if Kafka is unavailable, the file write still succeeds. The ITCH feed handler is a **separate process** consuming from Kafka, decoupled from the producer for fault isolation, independent scaling, and restartability. If the ITCH consumer crashes, the producer keeps running and no data is lost; the consumer restarts from its last Kafka offset.
+**Design principle (mirrors real exchange architecture):** The producer writes to a local journal (`.qrsdp`) and a distribution layer (Kafka) simultaneously via MultiplexSink. The `.qrsdp` file and Kafka are independent — if Kafka is unavailable, the file write still succeeds. ClickHouse consumes from Kafka natively via its Kafka engine — no custom consumer code required. The ITCH feed handler is a **separate process** consuming from Kafka, decoupled from the producer for fault isolation, independent scaling, and restartability. If the ITCH consumer crashes, the producer keeps running and no data is lost; the consumer restarts from its last Kafka offset.
 
 ---
 
-## Day 6 (Monday) — Data Platform: Kafka Integration + Parquet + dbt
+## Day 6 (Monday) — Data Platform: Kafka Integration + ClickHouse + dbt
 
-**Goal:** Build the full data platform in one day: C++ dual-write (MultiplexSink + KafkaSink), Docker infrastructure (Kafka, MinIO), Python Parquet consumer, dbt analytics layer, and data quality checks.
+**Goal:** Build the full data platform in one day: C++ dual-write (MultiplexSink + KafkaSink), Docker infrastructure (Kafka, ClickHouse), native Kafka-to-ClickHouse ingestion, dbt analytics layer, and data quality checks.
 
 ### C++ Components
 
@@ -114,29 +113,29 @@ The following was delivered in Week 1 and is complete, tested, and committed:
 ### Infrastructure
 
 6. **Docker Compose** (`docker/docker-compose.yml`)
-   - Add Kafka service (KRaft mode, single broker, `confluentinc/cp-kafka:7.6.0` or `bitnami/kafka:3.7`)
-   - Add MinIO service (`minio/minio`) for S3-compatible object storage
-   - Add `createbuckets` init service to create the `exchange-data` bucket on startup
-   - Add `parquet-consumer` service (Python, runs `parquet_consumer.py`)
+   - Add Kafka service (KRaft mode, single broker, `apache/kafka:3.7.0`)
+   - Add ClickHouse service (`clickhouse/clickhouse-server:24.3`) with init scripts for Kafka engine, MergeTree table, and materialized view
+   - Centralize connection config via `x-kafka-env` YAML anchor for easy swap to managed services
    - Add `dbt-runner` service (one-shot: `dbt run && dbt test`)
    - Update simulator service to pass `--kafka-brokers kafka:9092`
-   - Expose: Kafka `localhost:9092`, MinIO `localhost:9000`
+   - Expose: Kafka `localhost:9092`, ClickHouse `localhost:8123`
 
-### Python Pipeline
+### ClickHouse Ingestion
 
-7. **Parquet consumer** (`pipeline/parquet_consumer.py`)
-   - `confluent-kafka` Python client, consumer group `parquet-writer`
-   - Deserializes 26-byte message values using the same `RECORD_DTYPE` numpy dtype from `notebooks/qrsdp_reader.py`
-   - Batches messages (10,000 records or 5 seconds, whichever first)
-   - Writes Parquet via `pyarrow` to MinIO: `s3://exchange-data/raw/events/symbol={key}/date={YYYY-MM-DD}/events-{offset}.parquet`
-   - Handles graceful shutdown (commit offsets, flush partial batch)
+7. **ClickHouse init schema** (`pipeline/clickhouse/init.sql`)
+   - `exchange_events_kafka` (Kafka engine): reads 26-byte `RowBinary` records from the `exchange.events` topic
+   - `exchange_events` (MergeTree): queryable storage partitioned by `(symbol, date)`, ordered by `(symbol, date, ts_ns)`
+   - `exchange_events_mv` (Materialized View): transforms Kafka records (maps type codes to names via `multiIf`, extracts `symbol` from Kafka key, `date` from broker timestamp)
+   - `init.sh` entrypoint: substitutes `${KAFKA_BROKERS}` and `${KAFKA_TOPIC}` into the SQL template at startup
+
+### dbt Analytics
 
 8. **dbt project** (`pipeline/dbt_project/`)
-   - DuckDB profile reading Parquet from MinIO via `httpfs` extension
-   - **Staging**: `stg_events.sql` — read raw Parquet, cast types, add `event_category`, `is_trade`, `time_seconds`
-   - **Mart**: `fct_ohlcv_1min.sql` — 1-minute OHLCV bars per symbol per day via window functions
-   - **Mart**: `fct_session_summary.sql` — per-session statistics (event counts by type, open/close, spread stats)
-   - **dbt tests**: not-null PKs, accepted event type values (0–5), monotonic `ts_ns`, no duplicate `order_id`
+   - ClickHouse profile via `dbt-clickhouse` adapter, configured by env vars (`CLICKHOUSE_HOST`, `CLICKHOUSE_PORT`, etc.)
+   - **Staging**: `stg_events.sql` — view over the `exchange_events` MergeTree table
+   - **Mart**: `mart_ofi_1min.sql` — 1-minute OFI bars per symbol per day using `sumIf()`/`countIf()`/`argMax()`
+   - **Mart**: `mart_session_summary.sql` — per-session statistics using `countIf()`/`sumIf()`
+   - **dbt tests**: not-null PKs, accepted event type values (0–5)
 
 9. **Data quality checks** (dbt tests)
    - Row count per session within expected range
@@ -144,7 +143,7 @@ The following was delivered in Week 1 and is complete, tested, and committed:
 
 10. **Documentation**: `docs/data-platform.md` — architecture diagram, component descriptions, full-stack runbook. Update `docs/event-log-format.md` with Kafka message format.
 
-**End of day:** `docker compose up` runs the full pipeline end-to-end: simulator dual-writes `.qrsdp` + Kafka, Parquet consumer lands files in MinIO, `dbt run` produces OHLCV bars and session summaries queryable in DuckDB.
+**End of day:** `docker compose --profile platform up` runs the full pipeline end-to-end: producer dual-writes `.qrsdp` + Kafka, ClickHouse ingests events natively via its Kafka engine, `dbt run` produces OFI bars and session summaries queryable in ClickHouse.
 
 ---
 
@@ -220,7 +219,7 @@ The following was delivered in Week 1 and is complete, tested, and committed:
    - `tests/qrsdp/test_moldudp64.cpp`: header layout, sequence number progression, message count, MTU splitting
    - `tests/qrsdp/test_udp_roundtrip.cpp`: localhost loopback send/receive, decode and verify ITCH messages match originals
 
-**End of day:** Run `docker compose up` to start the full stack, then in a separate terminal `qrsdp_listen --port 5001` shows a live stream of decoded ITCH messages. The ITCH consumer independently processes events from Kafka with no coupling to the producer process.
+**End of day:** Run `docker compose --profile platform up` to start the full stack, then in a separate terminal `qrsdp_listen --port 5001` shows a live stream of decoded ITCH messages. The ITCH consumer independently processes events from Kafka with no coupling to the producer process.
 
 ---
 
@@ -304,7 +303,7 @@ The following was delivered in Week 1 and is complete, tested, and committed:
 
 5. **Final checks**
    - Run full test suite (target ~115+ tests)
-   - Full Docker Compose stack runs end-to-end (simulator → Kafka → Parquet + ITCH)
+   - Full Docker Compose stack runs end-to-end (producer → Kafka → ClickHouse + ITCH)
    - Clean up any temporary files
    - Tag release: `v0.3.0`
 
@@ -316,10 +315,11 @@ The following was delivered in Week 1 and is complete, tested, and committed:
 
 | Item | Description |
 |---|---|
-| **Hot/local storage lifecycle** | `.qrsdp` files on local disk are the hot tier. In production, a nightly job would re-compress with Zstd, upload to S3 warm storage, with S3 lifecycle rules transitioning to Glacier Deep Archive after 90 days. Document in `data-platform.md`. |
+| **Hot/local storage lifecycle** | `.qrsdp` files on local disk are the hot tier. In production, a nightly job would re-compress with Zstd, upload to S3 warm storage, with S3 lifecycle rules transitioning to Glacier Deep Archive after 90 days. |
 | **Schema Registry + Avro** | Kafka messages use raw 26-byte `DiskEventRecord` binary. Production systems would use Avro with Schema Registry for schema evolution. |
 | **ITCH retransmission/recovery** | MoldUDP64 gap detection is noted but the retransmit-request protocol is not implemented. UDP is fire-and-forget. |
 | **Airflow/Dagster orchestration** | Pipeline runs via Docker Compose commands. Production orchestration is a future task. |
+| **Managed services** | Kafka connection settings are centralised in `docker-compose.yml` YAML anchors for easy swap to managed Kafka. |
 
 ---
 
@@ -331,8 +331,7 @@ The following was delivered in Week 1 and is complete, tested, and committed:
 | Kafka client library | librdkafka (C/C++) | De facto standard; used by confluent-kafka-python under the hood. Same library for producer and ITCH consumer. |
 | Kafka message format | Raw 26-byte `DiskEventRecord` binary | Avoids libavro/libserdes build complexity. Python consumers already know the dtype. Schema evolution deferred. |
 | Kafka mode | KRaft (no ZooKeeper) | Simpler Docker setup, current direction of Kafka. |
-| Object storage | MinIO (S3-compatible) | Demonstrates standard data lake backing store. DuckDB reads natively via `httpfs`. |
-| Analytics database | dbt-duckdb | Zero infrastructure (embedded), fast on Parquet, no server process. |
+| Analytics database | ClickHouse | Native Kafka engine eliminates custom consumer code. MergeTree provides fast OLAP queries. |
 | MultiplexSink failure mode | Best-effort fanout | If KafkaSink fails, log and continue writing to BinaryFileSink. File is source of truth; Kafka is best-effort. |
 | ITCH version | ITCH 5.0 (NASDAQ) | Current spec, widely documented, 5-message subset covers all event types. |
 | Session layer | MoldUDP64 | Standard for ITCH; adds sequence numbers for gap detection. |
@@ -349,14 +348,14 @@ The following was delivered in Week 1 and is complete, tested, and committed:
 |---|---|---|
 | **C++** | `librdkafka-dev` | Ubuntu: `apt-get install librdkafka-dev`, macOS: `brew install librdkafka` |
 | **C++** | POSIX sockets | System headers, no external dependency |
-| **Python** | `confluent-kafka` | `pip install confluent-kafka` |
-| **Python** | `pyarrow` | `pip install pyarrow` |
-| **Python** | `boto3` | `pip install boto3` |
-| **Python** | `dbt-duckdb` | `pip install dbt-duckdb` |
-| **Docker** | Kafka | `confluentinc/cp-kafka:7.6.0` |
-| **Docker** | MinIO | `minio/minio` |
+| **Python** | `dbt-clickhouse` | `pip install dbt-clickhouse` |
+| **Python** | `clickhouse-connect` | `pip install clickhouse-connect` |
+| **Python** | `confluent-kafka` | `pip install confluent-kafka` (retained for optional utilities) |
+| **Python** | `pyarrow` | `pip install pyarrow` (retained for dbt-clickhouse internals) |
+| **Docker** | Kafka | `apache/kafka:3.7.0` |
+| **Docker** | ClickHouse | `clickhouse/clickhouse-server:24.3` |
 
-No new third-party C++ libraries beyond librdkafka. ITCH encoding is hand-rolled (packed structs + endian conversion). UDP uses platform sockets.
+No new third-party C++ libraries beyond librdkafka. ITCH encoding is hand-rolled (packed structs + endian conversion). UDP uses platform sockets. ClickHouse ingestion is zero-code (Kafka engine + materialized view, configured via init SQL).
 
 ---
 
@@ -392,17 +391,19 @@ src/
   listen_main.cpp                   Day 7 (qrsdp_listen entry point)
 
 pipeline/
-  parquet_consumer.py               Day 6 (Kafka → Parquet landing)
-  requirements.txt                  Day 6 (Python deps for pipeline)
+  clickhouse/
+    init.sql                        Day 6 (Kafka engine + MergeTree + materialized view)
+    init.sh                         Day 6 (envsubst entrypoint for broker/topic templating)
+  requirements.txt                  Day 6 (Python deps: dbt-clickhouse, clickhouse-connect)
   dbt_project/
     dbt_project.yml                 Day 6
+    profiles.yml                    Day 6 (dbt-clickhouse profile with env var config)
     models/staging/stg_events.sql
-    models/marts/fct_ohlcv_1min.sql
-    models/marts/fct_session_summary.sql
+    models/marts/mart_ofi_1min.sql
+    models/marts/mart_session_summary.sql
 
 docker/
-  docker-compose.yml                Day 6 (add Kafka, MinIO, consumers)
-  Dockerfile.pipeline               Day 6 (Python consumer image)
+  docker-compose.yml                Day 6 (add Kafka, ClickHouse; x-kafka-env/x-clickhouse-env anchors)
 
 docs/
   data-platform.md                  Day 6 (architecture + runbook)
@@ -435,9 +436,10 @@ notebooks/
 
 - [ ] `qrsdp_run --kafka-brokers localhost:9092 --days 5` dual-writes to `.qrsdp` + Kafka simultaneously
 - [ ] MultiplexSink continues writing to file if Kafka is unavailable
-- [ ] Parquet files land in MinIO partitioned by symbol/date within seconds of production
-- [ ] `dbt run` produces OHLCV bars and session summaries queryable via DuckDB
-- [ ] dbt tests pass (no nulls, valid event types, monotonic timestamps)
+- [ ] ClickHouse Kafka engine ingests events automatically — no custom consumer code
+- [ ] Events are queryable in ClickHouse (MergeTree) within seconds of production
+- [ ] `dbt run` produces OFI bars and session summaries queryable via ClickHouse
+- [ ] dbt tests pass (no nulls, valid event types)
 - [ ] `qrsdp_itch_stream` consumes from Kafka and streams ITCH 5.0 over UDP multicast
 - [ ] `qrsdp_listen` decodes and prints all ITCH message types from the live feed
 - [ ] ITCH consumer can restart and resume from last Kafka offset without data loss
@@ -446,7 +448,8 @@ notebooks/
 - [ ] `--model hlr` uses `CurveIntensityModel` and produces events with per-level queue-size-dependent rates
 - [ ] Multi-security runs with `--factor-loading 0.5` show visible price correlation between symbols
 - [ ] All existing tests still pass; new tests cover MultiplexSink, ITCH encoding, MoldUDP64 framing, Hawkes model, and UDP round-trip
-- [ ] `docker compose up` runs the full stack end-to-end
+- [ ] `docker compose --profile platform up` runs the full stack end-to-end (Kafka + ClickHouse + producer)
+- [ ] Kafka connection settings are centralised in YAML anchors for easy managed service swap
 
 ---
 

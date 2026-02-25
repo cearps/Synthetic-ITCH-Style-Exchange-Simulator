@@ -40,6 +40,10 @@ struct RunConfig {
     uint32_t chunk_capacity;    // 0 = use default (4096)
     std::string start_date;     // "YYYY-MM-DD"
     std::vector<SecurityConfig> securities;  // empty = single-security mode
+    std::string kafka_brokers;  // empty = no Kafka (file-only)
+    std::string kafka_topic = "exchange.events";
+    bool realtime = false;      // pace events to simulated inter-arrival times
+    double speed = 1.0;         // wall-clock multiplier (100 = 100x faster than real time)
 };
 
 struct DayResult {
@@ -74,6 +78,9 @@ public:
                                         const RunResult& result,
                                         const std::string& path);
 };
+
+/// Install SIGTERM/SIGINT handler for graceful shutdown in continuous mode.
+void installShutdownHandler();
 
 // Date helpers (exposed for testing)
 struct Date {

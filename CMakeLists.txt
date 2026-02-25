@@ -51,6 +51,14 @@ set(IO_SOURCES
     src/io/binary_file_sink.cpp
     src/io/event_log_reader.cpp
 )
+
+# --- Optional Kafka support (Docker-only by default) ---
+option(BUILD_KAFKA_SUPPORT "Enable Kafka sink (requires librdkafka)" OFF)
+if(BUILD_KAFKA_SUPPORT)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(RDKAFKA REQUIRED IMPORTED_TARGET rdkafka++)
+    list(APPEND IO_SOURCES src/io/kafka_sink.cpp)
+endif()
 set(PRODUCER_SOURCES
     src/producer/qrsdp_producer.cpp
     src/producer/session_runner.cpp
@@ -70,6 +78,11 @@ set(LIBRARY_SOURCES
 add_library(simulator_lib STATIC ${LIBRARY_SOURCES})
 target_compile_options(simulator_lib PRIVATE ${PROJECT_WARNING_FLAGS})
 target_link_libraries(simulator_lib PUBLIC lz4)
+
+if(BUILD_KAFKA_SUPPORT)
+    target_link_libraries(simulator_lib PUBLIC PkgConfig::RDKAFKA)
+    target_compile_definitions(simulator_lib PUBLIC QRSDP_KAFKA_ENABLED)
+endif()
 
 # Headless CLI executable
 add_executable(qrsdp_cli src/main.cpp)
@@ -105,18 +118,26 @@ if(BUILD_TESTING)
     FetchContent_MakeAvailable(googletest)
 
     set(TEST_SOURCES
-        tests/qrsdp/test_records.cpp
-        tests/qrsdp/test_interfaces.cpp
-        tests/qrsdp/test_book.cpp
-        tests/qrsdp/test_intensity.cpp
-        tests/qrsdp/test_curve_intensity.cpp
-        tests/qrsdp/test_calibration.cpp
-        tests/qrsdp/test_sampler.cpp
-        tests/qrsdp/test_attribute_sampler.cpp
-        tests/qrsdp/test_producer.cpp
-        tests/qrsdp/test_binary_file_sink.cpp
-        tests/qrsdp/test_event_log_reader.cpp
-        tests/qrsdp/test_session_runner.cpp
+        # core
+        tests/core/test_records.cpp
+        tests/core/test_interfaces.cpp
+        # io
+        tests/io/test_binary_file_sink.cpp
+        tests/io/test_event_log_reader.cpp
+        tests/io/test_multiplex_sink.cpp
+        # book
+        tests/book/test_book.cpp
+        # model
+        tests/model/test_intensity.cpp
+        tests/model/test_curve_intensity.cpp
+        # calibration
+        tests/calibration/test_calibration.cpp
+        # sampler
+        tests/sampler/test_sampler.cpp
+        tests/sampler/test_attribute_sampler.cpp
+        # producer
+        tests/producer/test_producer.cpp
+        tests/producer/test_session_runner.cpp
     )
 
     if(TEST_SOURCES)

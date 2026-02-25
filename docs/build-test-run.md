@@ -11,7 +11,8 @@
 
 Optional:
 
-- Docker Desktop (for headless Linux builds / CI)
+- Docker Desktop (for headless Linux builds / CI / streaming platform)
+- librdkafka (`apt install librdkafka-dev` or `brew install librdkafka`) — only needed when building with `BUILD_KAFKA_SUPPORT=ON`
 
 ## Build Targets
 
@@ -21,8 +22,14 @@ Optional:
 | `qrsdp_cli` | Single-session CLI (quick runs, debugging) | always built |
 | `qrsdp_run` | Multi-day session runner (generates datasets) | always built |
 | `qrsdp_log_info` | Log file inspector (prints header, stats, samples) | always built |
-| `tests` | Google Test suite (91 cases) | `BUILD_TESTING=ON` (default) |
+| `tests` | Google Test suite (98 cases) | `BUILD_TESTING=ON` (default) |
 | `qrsdp_ui` | ImGui real-time debugging UI | `BUILD_QRSDP_UI=ON` (default) |
+
+Kafka support is compiled separately and off by default (no librdkafka needed for core development):
+
+| Option | Default | Description |
+|---|---|---|
+| `BUILD_KAFKA_SUPPORT` | `OFF` | Enable KafkaSink + MultiplexSink (requires librdkafka) |
 
 ---
 
@@ -122,19 +129,47 @@ cmake .. -DBUILD_QRSDP_UI=OFF
 
 ```bash
 # Build the C++ simulator
-docker-compose -f docker/docker-compose.yml build build
+docker compose -f docker/docker-compose.yml build build
 
 # Run the test suite
-docker-compose -f docker/docker-compose.yml run --rm test
+docker compose -f docker/docker-compose.yml run --rm test
 
 # Generate 5 trading days of data
-docker-compose -f docker/docker-compose.yml run --rm simulator
+docker compose -f docker/docker-compose.yml run --rm simulator
 
 # Launch Jupyter notebooks (accessible at http://localhost:8888)
-docker-compose -f docker/docker-compose.yml up notebooks
+docker compose -f docker/docker-compose.yml up notebooks
 ```
 
 The build and test images use GCC on Ubuntu 22.04 with the UI disabled (no display server). The `simulator` service runs `qrsdp_run --seed 42 --days 5` by default, writing to a shared `output` volume. The `notebooks` service provides a Jupyter environment with all Python dependencies pre-installed, mounting the same output volume for analysis.
+
+### Streaming Platform (Kafka + ClickHouse)
+
+The streaming platform runs as a Docker Compose profile. It builds the producer
+with Kafka support enabled, streams events through Kafka, and ClickHouse
+ingests them natively via its Kafka engine.
+
+```bash
+# Start the streaming platform (Kafka + ClickHouse + real-time producer)
+docker compose -f docker/docker-compose.yml --profile platform up -d --build
+
+# Check event counts in ClickHouse
+curl 'http://localhost:8123/?query=SELECT+count()+FROM+exchange_events'
+
+# Interactive ClickHouse SQL
+docker exec -it docker-clickhouse-1 clickhouse-client
+
+# Stop the platform (add -v to wipe data)
+docker compose -f docker/docker-compose.yml --profile platform down
+```
+
+The platform profile launches three services:
+- **kafka** — single-node KRaft broker (no ZooKeeper)
+- **clickhouse** — OLAP store with Kafka engine consuming events automatically
+- **kafka-producer** — runs with `--realtime --speed 100 --days 0` (continuous streaming, ~4 min per simulated trading day)
+
+Kafka and ClickHouse connection settings are centralised in YAML anchors at the
+top of `docker-compose.yml` for easy swap to managed services.
 
 ---
 
@@ -175,18 +210,22 @@ Runs multiple consecutive trading sessions with continuous price chaining (each 
 
 ```
 Usage: qrsdp_run [options]
-  --seed <n>          Base seed (default: 42)
-  --days <n>          Number of trading days (default: 5)
-  --seconds <n>       Seconds per session (default: 23400)
-  --p0 <ticks>        Opening price in ticks (default: 10000)
-  --output <dir>      Output directory (default: output/run_<seed>)
-  --start-date <str>  First trading date (default: 2026-01-02)
-  --chunk-size <n>    Records per chunk (default: 4096)
-  --perf-doc <path>   Write performance doc (default: <output>/performance-results.md)
-  --depth <n>         Initial depth per level (default: 5)
-  --levels <n>        Levels per side (default: 5)
-  --securities <spec> Comma-separated symbol:p0 pairs (e.g. AAPL:10000,MSFT:15000)
-  --help              Show this help
+  --seed <n>              Base seed (default: 42)
+  --days <n>              Number of trading days; 0 = run indefinitely (default: 5)
+  --seconds <n>           Seconds per session (default: 23400)
+  --p0 <ticks>            Opening price in ticks (default: 10000)
+  --output <dir>          Output directory (default: output/run_<seed>)
+  --start-date <str>      First trading date (default: 2026-01-02)
+  --chunk-size <n>        Records per chunk (default: 4096)
+  --perf-doc <path>       Write performance doc (default: <output>/performance-results.md)
+  --depth <n>             Initial depth per level (default: 5)
+  --levels <n>            Levels per side (default: 5)
+  --securities <spec>     Comma-separated symbol:p0 pairs (e.g. AAPL:10000,MSFT:15000)
+  --kafka-brokers <host>  Kafka bootstrap servers (empty = file-only, no Kafka)
+  --kafka-topic <name>    Kafka topic name (default: exchange.events)
+  --realtime              Pace events to simulated inter-arrival times
+  --speed <f>             Speed multiplier for real-time mode (default: 100.0)
+  --help                  Show this help
 ```
 
 ```bash
@@ -201,6 +240,16 @@ Usage: qrsdp_run [options]
 
 # Multi-security run (each symbol runs in parallel on its own thread)
 ./build/qrsdp_run --seed 42 --days 5 --securities "AAPL:10000,MSFT:15000,GOOG:20000"
+
+# Real-time pacing (100x speed — 6.5h session in ~4 min)
+./build/qrsdp_run --realtime --speed 100 --days 1 --seconds 23400
+
+# Continuous mode (runs indefinitely until Ctrl-C)
+./build/qrsdp_run --realtime --speed 1000 --days 0
+
+# Stream to Kafka (requires BUILD_KAFKA_SUPPORT=ON and a running broker)
+./build/qrsdp_run --kafka-brokers localhost:9092 --kafka-topic exchange.events \
+    --realtime --speed 100 --days 0 --securities "AAPL:10000,MSFT:15000"
 ```
 
 Example output (single-security):
@@ -357,6 +406,7 @@ jupyter notebook
 | `02_stylised_facts.ipynb` | Event type distribution, inter-arrival times, return distributions, autocorrelation |
 | `03_session_summary.ipynb` | Per-day and multi-day stats dashboard: event counts, prices, compression, shifts |
 | `04_multi_security_comparison.ipynb` | Cross-security price paths (raw and normalised), return distributions, spread overlay, aggregate stats |
+| `06_live_streaming_query.ipynb` | Real-time queries against live ClickHouse data: event counts, price series, OHLC bars, auto-refreshing dashboard |
 
 ### Python Modules
 
@@ -381,7 +431,8 @@ src/
   sampler/       i_event_sampler.h, i_attribute_sampler.h,
                  competing_intensity_sampler, unit_size_attribute_sampler
   io/            i_event_sink.h, in_memory_sink, binary_file_sink,
-                 event_log_reader, event_log_format.h
+                 event_log_reader, event_log_format.h,
+                 multiplex_sink, kafka_sink (BUILD_KAFKA_SUPPORT)
   producer/      i_producer.h, qrsdp_producer, session_runner
   main.cpp       Single-session CLI entry point (qrsdp_cli)
   run_main.cpp   Multi-day session runner entry point (qrsdp_run)
@@ -390,7 +441,10 @@ src/
 third_party/
   lz4/           Vendored LZ4 compression (BSD licence)
 
-tests/qrsdp/    12 test files, 91 test cases
+pipeline/
+  clickhouse/    init.sql (Kafka engine + MergeTree schema), init.sh (entrypoint)
+
+tests/qrsdp/    test files, 98 test cases
 tools/qrsdp_ui/  ImGui + ImPlot real-time debugging UI
 ```
 
@@ -407,4 +461,5 @@ tools/qrsdp_ui/  ImGui + ImPlot real-time debugging UI
 - **Producer** — determinism, invariants, shift detection, reinit
 - **BinaryFileSink** — header, chunked writes, round-trip, index footer
 - **EventLogReader** — header parsing, chunk reads, range queries, scan fallback
-- **SessionRunner** — single-day, continuous chaining, seed strategy, business dates, manifest, multi-security run, seed independence, multi-security manifest, single-security backward compat
+- **MultiplexSink** — fanout to multiple sinks, one sink failure doesn't block others
+- **SessionRunner** — single-day, continuous chaining, seed strategy, business dates, manifest, multi-security run, seed independence, multi-security manifest, single-security backward compat, real-time pacing, continuous mode
