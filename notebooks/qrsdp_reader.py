@@ -81,7 +81,7 @@ def read_header(path: str | Path) -> Dict:
         "initial_depth": fields[10],
         "chunk_capacity": fields[11],
         "header_flags": fields[12],
-        "reserved": fields[13],
+        "market_open_ns": fields[13],
     }
 
 

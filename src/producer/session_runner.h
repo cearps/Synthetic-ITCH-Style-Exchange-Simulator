@@ -42,6 +42,7 @@ struct RunConfig {
     std::vector<SecurityConfig> securities;  // empty = single-security mode
     std::string kafka_brokers;  // empty = no Kafka (file-only)
     std::string kafka_topic = "exchange.events";
+    uint32_t market_open_seconds = kDefaultMarketOpenSeconds;
     bool realtime = false;      // pace events to simulated inter-arrival times
     double speed = 1.0;         // wall-clock multiplier (100 = 100x faster than real time)
 };

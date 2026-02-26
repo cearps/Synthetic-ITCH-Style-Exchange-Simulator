@@ -96,7 +96,7 @@ TEST_F(BinaryFileSinkTest, FileHeaderSessionMetadata) {
     EXPECT_EQ(hdr.initial_spread_ticks, 2u);
     EXPECT_EQ(hdr.initial_depth, 50u);
     EXPECT_EQ(hdr.chunk_capacity, 128u);
-    EXPECT_EQ(hdr.reserved, 0u);
+    EXPECT_EQ(hdr.market_open_ns, 0u);
 }
 
 // --- Empty file ---

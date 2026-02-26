@@ -43,6 +43,7 @@ int main(int argc, char* argv[]) {
     session.tick_size = 100;
     session.initial_spread_ticks = 2;
     session.initial_depth = 5;
+    session.market_open_seconds = qrsdp::kDefaultMarketOpenSeconds;
     session.intensity_params = params;
 
     std::unique_ptr<qrsdp::IEventSink> sink;

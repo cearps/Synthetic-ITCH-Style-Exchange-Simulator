@@ -346,5 +346,51 @@ TEST(QrsdpProducer, CurveModelSmoke) {
     EXPECT_GE(ask.price_ticks - bid.price_ticks, 1);
 }
 
+TEST(QrsdpProducer, MarketOpenOffsetAppliedToTimestamps) {
+    TradingSession session = makeSession(42, 2);
+    session.market_open_seconds = 34200;  // 09:30 ET
+    const uint64_t expected_offset_ns = 34200ULL * 1'000'000'000ULL;
+
+    Mt19937Rng rng(session.seed);
+    MultiLevelBook book;
+    SimpleImbalanceIntensity model(session.intensity_params);
+    CompetingIntensitySampler eventSampler(rng);
+    UnitSizeAttributeSampler attrSampler(rng, 0.5);
+    QrsdpProducer producer(rng, book, model, eventSampler, attrSampler);
+    InMemorySink sink;
+
+    producer.runSession(session, sink);
+
+    ASSERT_GT(sink.size(), 0u);
+    for (size_t i = 0; i < sink.size(); ++i) {
+        EXPECT_GE(sink.events()[i].ts_ns, expected_offset_ns)
+            << "event " << i << " timestamp should be >= market open";
+    }
+    // First event should be close to (but after) the market open offset
+    const uint64_t first_ts = sink.events()[0].ts_ns;
+    EXPECT_LT(first_ts - expected_offset_ns, 1'000'000'000ULL)
+        << "first event should be within 1s of market open";
+}
+
+TEST(QrsdpProducer, ZeroMarketOpenPreservesLegacyTimestamps) {
+    TradingSession session = makeSession(42, 2);
+    session.market_open_seconds = 0;
+
+    Mt19937Rng rng(session.seed);
+    MultiLevelBook book;
+    SimpleImbalanceIntensity model(session.intensity_params);
+    CompetingIntensitySampler eventSampler(rng);
+    UnitSizeAttributeSampler attrSampler(rng, 0.5);
+    QrsdpProducer producer(rng, book, model, eventSampler, attrSampler);
+    InMemorySink sink;
+
+    producer.runSession(session, sink);
+
+    ASSERT_GT(sink.size(), 0u);
+    // With market_open_seconds=0, timestamps should start near 0
+    EXPECT_LT(sink.events()[0].ts_ns, 1'000'000'000ULL)
+        << "first event should be within 1s of zero when no offset";
+}
+
 }  // namespace test
 }  // namespace qrsdp

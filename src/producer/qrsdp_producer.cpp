@@ -36,6 +36,7 @@ void QrsdpProducer::startSession(const TradingSession& session) {
     reinit_mean_ = session.queue_reactive.reinit_depth_mean > 0.0
                        ? session.queue_reactive.reinit_depth_mean
                        : 10.0;
+    market_open_ns_ = static_cast<uint64_t>(session.market_open_seconds) * 1'000'000'000ULL;
 }
 
 bool QrsdpProducer::stepOneEvent(IEventSink& sink) {
@@ -93,7 +94,7 @@ bool QrsdpProducer::stepOneEvent(IEventSink& sink) {
     if (new_ask > prev_ask) flags |= kFlagShiftUp;
     if (reinit_happened)    flags |= kFlagReinit;
     EventRecord rec;
-    rec.ts_ns = static_cast<uint64_t>(t_ * 1e9);
+    rec.ts_ns = market_open_ns_ + static_cast<uint64_t>(t_ * 1e9);
     rec.type = static_cast<uint8_t>(type);
     rec.side = static_cast<uint8_t>(attrs.side);
     rec.price_ticks = attrs.price_ticks;

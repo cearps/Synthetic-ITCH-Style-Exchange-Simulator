@@ -330,6 +330,7 @@ static std::vector<DayResult> runSecurityDays(
         session.tick_size = tick_size;
         session.initial_spread_ticks = initial_spread_ticks;
         session.initial_depth = initial_depth;
+        session.market_open_seconds = config.market_open_seconds;
         session.intensity_params = intensity_params;
         session.queue_reactive = queue_reactive;
 

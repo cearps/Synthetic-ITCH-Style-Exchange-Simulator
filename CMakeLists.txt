@@ -14,6 +14,7 @@ endif()
 # Compiler warnings — applied per-target to avoid polluting third-party deps
 if(MSVC)
     set(PROJECT_WARNING_FLAGS /W4 /WX)
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 else()
     set(PROJECT_WARNING_FLAGS -Wall -Wextra -Wpedantic -Werror)
 endif()
@@ -52,12 +53,20 @@ set(IO_SOURCES
     src/io/event_log_reader.cpp
 )
 
+# --- ITCH 5.0 encoding, MoldUDP64, and UDP sender (no external deps) ---
+set(ITCH_SOURCES
+    src/itch/itch_encoder.cpp
+    src/itch/moldudp64.cpp
+    src/itch/udp_sender.cpp
+)
+
 # --- Optional Kafka support (Docker-only by default) ---
 option(BUILD_KAFKA_SUPPORT "Enable Kafka sink (requires librdkafka)" OFF)
 if(BUILD_KAFKA_SUPPORT)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(RDKAFKA REQUIRED IMPORTED_TARGET rdkafka++)
     list(APPEND IO_SOURCES src/io/kafka_sink.cpp)
+    list(APPEND ITCH_SOURCES src/itch/itch_stream_consumer.cpp)
 endif()
 set(PRODUCER_SOURCES
     src/producer/qrsdp_producer.cpp
@@ -71,6 +80,7 @@ set(LIBRARY_SOURCES
     ${SAMPLER_SOURCES}
     ${RNG_SOURCES}
     ${IO_SOURCES}
+    ${ITCH_SOURCES}
     ${PRODUCER_SOURCES}
 )
 
@@ -103,6 +113,16 @@ target_link_libraries(qrsdp_run PRIVATE simulator_lib)
 add_executable(qrsdp_calibrate src/calibrate_main.cpp)
 target_compile_options(qrsdp_calibrate PRIVATE ${PROJECT_WARNING_FLAGS})
 target_link_libraries(qrsdp_calibrate PRIVATE simulator_lib)
+
+# ITCH stream consumer (Kafka -> ITCH 5.0 over UDP multicast)
+add_executable(qrsdp_itch_stream src/itch_stream_main.cpp)
+target_compile_options(qrsdp_itch_stream PRIVATE ${PROJECT_WARNING_FLAGS})
+target_link_libraries(qrsdp_itch_stream PRIVATE simulator_lib)
+
+# Reference ITCH listener (joins multicast, decodes, prints)
+add_executable(qrsdp_listen src/listen_main.cpp)
+target_compile_options(qrsdp_listen PRIVATE ${PROJECT_WARNING_FLAGS})
+target_link_libraries(qrsdp_listen PRIVATE simulator_lib)
 
 # Google Test setup
 option(BUILD_TESTING "Enable testing" ON)
@@ -138,6 +158,10 @@ if(BUILD_TESTING)
         # producer
         tests/producer/test_producer.cpp
         tests/producer/test_session_runner.cpp
+        # itch
+        tests/itch/test_itch_encoder.cpp
+        tests/itch/test_moldudp64.cpp
+        tests/itch/test_udp_roundtrip.cpp
     )
 
     if(TEST_SOURCES)
@@ -160,6 +184,8 @@ if(WIN32)
     target_link_libraries(qrsdp_cli PRIVATE ws2_32)
     target_link_libraries(qrsdp_run PRIVATE ws2_32)
     target_link_libraries(qrsdp_calibrate PRIVATE ws2_32)
+    target_link_libraries(qrsdp_itch_stream PRIVATE ws2_32)
+    target_link_libraries(qrsdp_listen PRIVATE ws2_32)
     if(BUILD_TESTING AND TEST_SOURCES)
         target_link_libraries(tests PRIVATE ws2_32)
     endif()
@@ -167,6 +193,8 @@ else()
     target_link_libraries(qrsdp_cli PRIVATE pthread)
     target_link_libraries(qrsdp_run PRIVATE pthread)
     target_link_libraries(qrsdp_calibrate PRIVATE pthread)
+    target_link_libraries(qrsdp_itch_stream PRIVATE pthread)
+    target_link_libraries(qrsdp_listen PRIVATE pthread)
     if(BUILD_TESTING AND TEST_SOURCES)
         target_link_libraries(tests PRIVATE pthread)
     endif()

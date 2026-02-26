@@ -8,6 +8,22 @@
 #include <string>
 #include <vector>
 
+#ifdef _WIN32
+#include <io.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+static int truncate(const char* path, long length) {
+    int fd;
+    if (_sopen_s(&fd, path, _O_RDWR | _O_BINARY, _SH_DENYNO, _S_IREAD | _S_IWRITE) != 0)
+        return -1;
+    int rc = _chsize_s(fd, length);
+    _close(fd);
+    return rc;
+}
+#else
+#include <unistd.h>
+#endif
+
 namespace qrsdp {
 namespace test {
 

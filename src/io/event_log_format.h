@@ -30,7 +30,7 @@ struct FileHeader {
     uint32_t initial_depth;
     uint32_t chunk_capacity;
     uint32_t header_flags;
-    uint64_t reserved;
+    uint64_t market_open_ns;
 };
 #pragma pack(pop)
 static_assert(sizeof(FileHeader) == 64, "FileHeader must be 64 bytes");

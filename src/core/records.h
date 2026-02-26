@@ -43,6 +43,8 @@ struct QueueReactiveParams {
     double reinit_depth_mean = 10.0;  // mean depth when reinitializing (e.g. Poisson)
 };
 
+constexpr uint32_t kDefaultMarketOpenSeconds = 34200;  // 09:30 ET
+
 struct TradingSession {
     uint64_t seed;
     int32_t  p0_ticks;
@@ -51,6 +53,7 @@ struct TradingSession {
     uint32_t tick_size;
     uint32_t initial_spread_ticks;  // spread at t=0 (default 2: best_bid=p0-1, best_ask=p0+1)
     uint32_t initial_depth;         // 0 = use producer default (50)
+    uint32_t market_open_seconds;   // seconds from midnight to market open (default 34200 = 09:30)
     IntensityParams intensity_params;
     QueueReactiveParams queue_reactive;
 };

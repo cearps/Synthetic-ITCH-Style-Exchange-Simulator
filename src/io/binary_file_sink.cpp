@@ -76,7 +76,7 @@ void BinaryFileSink::writeFileHeader(const TradingSession& session) {
     hdr.initial_depth        = session.initial_depth;
     hdr.chunk_capacity       = chunk_capacity_;
     hdr.header_flags         = 0;
-    hdr.reserved             = 0;
+    hdr.market_open_ns       = static_cast<uint64_t>(session.market_open_seconds) * 1'000'000'000ULL;
 
     std::fwrite(&hdr, sizeof(hdr), 1, file_);
 }

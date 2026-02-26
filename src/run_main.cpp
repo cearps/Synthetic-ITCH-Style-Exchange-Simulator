@@ -32,6 +32,7 @@ static void printUsage(const char* prog) {
         "  --spread-sens <f>   Spread-dependent feedback strength (default: 0.4)\n"
         "  --kafka-brokers <s> Kafka bootstrap servers (e.g. kafka:9092; empty = no Kafka)\n"
         "  --kafka-topic <s>   Kafka topic name (default: exchange.events)\n"
+        "  --market-open <HH:MM> Market open time (default: 09:30)\n"
         "  --realtime          Pace events to simulated inter-arrival times\n"
         "  --speed <f>         Speed multiplier for real-time mode (default: 100.0)\n"
         "                      100 = 6.5h session in ~4 min; 1 = actual real time\n"
@@ -39,6 +40,22 @@ static void printUsage(const char* prog) {
         "\n"
         "Use --days 0 for continuous mode (runs indefinitely until SIGTERM).\n",
         prog);
+}
+
+static uint32_t parseMarketOpen(const char* s) {
+    std::string str(s);
+    auto colon = str.find(':');
+    if (colon == std::string::npos) {
+        std::fprintf(stderr, "bad --market-open value: %s (expected HH:MM)\n", s);
+        std::exit(1);
+    }
+    int hh = std::atoi(str.substr(0, colon).c_str());
+    int mm = std::atoi(str.substr(colon + 1).c_str());
+    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) {
+        std::fprintf(stderr, "bad --market-open value: %s (hours 0-23, minutes 0-59)\n", s);
+        std::exit(1);
+    }
+    return static_cast<uint32_t>(hh * 3600 + mm * 60);
 }
 
 static std::vector<qrsdp::SecurityConfig> parseSecurities(
@@ -93,6 +110,7 @@ int main(int argc, char* argv[]) {
     std::string hlr_curves_path;
     std::string kafka_brokers;
     std::string kafka_topic = "exchange.events";
+    uint32_t market_open_seconds = qrsdp::kDefaultMarketOpenSeconds;
     bool realtime = false;
     double speed = 100.0;
     double base_L = 20.0;
@@ -128,6 +146,7 @@ int main(int argc, char* argv[]) {
         else if (std::strcmp(arg, "--hlr-curves") == 0) hlr_curves_path = next();
         else if (std::strcmp(arg, "--kafka-brokers") == 0) kafka_brokers = next();
         else if (std::strcmp(arg, "--kafka-topic") == 0)   kafka_topic = next();
+        else if (std::strcmp(arg, "--market-open") == 0) market_open_seconds = parseMarketOpen(next());
         else if (std::strcmp(arg, "--realtime") == 0)       realtime = true;
         else if (std::strcmp(arg, "--speed") == 0)          speed = std::atof(next());
         else if (std::strcmp(arg, "--base-L") == 0)     base_L = std::atof(next());
@@ -195,6 +214,7 @@ int main(int argc, char* argv[]) {
     config.chunk_capacity = chunk_size;
     config.start_date = start_date;
 
+    config.market_open_seconds = market_open_seconds;
     config.kafka_brokers = kafka_brokers;
     config.kafka_topic = kafka_topic;
     config.realtime = realtime;
