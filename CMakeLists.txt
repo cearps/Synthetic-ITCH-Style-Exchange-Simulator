@@ -162,6 +162,7 @@ if(BUILD_TESTING)
         tests/itch/test_itch_encoder.cpp
         tests/itch/test_moldudp64.cpp
         tests/itch/test_udp_roundtrip.cpp
+        tests/itch/test_e2e_pipeline.cpp
     )
 
     if(TEST_SOURCES)
