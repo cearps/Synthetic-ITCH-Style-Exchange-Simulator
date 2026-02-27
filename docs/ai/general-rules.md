@@ -8,7 +8,7 @@ These rules are intended for AI coding agents operating on this repository.
 - If you are unsure about requirements or intent, stop and ask follow-up questions, then proceed.
 - Prefer containerised applications and tests when it makes cross-platform use easier. The preference is **Docker**.
 - Apply TDD principles where relevant and structure tests to match the folder structure of the application code.
-- Avoid creating random, low-value documentation files. When you complete a major change, document it in the correct format in the worklog file (`docs/worklog/WORKLOG.md`).
+- Avoid creating random, low-value documentation files. When you complete a major change, document it in the commit message using the conventional commit format (e.g. `feat:`, `fix:`, `docs:`).
 
 ## Code comments
 

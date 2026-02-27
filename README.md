@@ -1,8 +1,6 @@
 # Synthetic ITCH Exchange Simulator
 
-A **deterministic exchange simulator** that generates realistic market data using queue-reactive stochastic models. The system produces order flow (adds, cancels, executions) from first principles, letting price emerge endogenously from limit order book dynamics.
-
-The long-term goal is to encode these events into **ITCH-like binary messages over UDP**, enabling realistic backtesting and systems testing as if consuming a live exchange feed.
+A **deterministic exchange simulator** that generates realistic market data using queue-reactive stochastic models. The system produces order flow (adds, cancels, executions) from first principles, letting price emerge endogenously from limit order book dynamics. Events are encoded into **ITCH 5.0 binary messages** framed in MoldUDP64 packets over UDP, and optionally streamed through Kafka into ClickHouse for analytics.
 
 ---
 
@@ -14,7 +12,17 @@ The system is built around a **Queue-Reactive, State-Dependent Poisson (QRSDP)**
 2. Events are sampled via competing Poisson processes (exponential inter-arrival, categorical type selection).
 3. Each event mutates the limit order book; price shifts emerge when the best level depletes.
 4. All events are written to chunked, LZ4-compressed binary event logs (`.qrsdp` format).
-5. Python analysis tools read the logs and produce interactive visualisations.
+5. Events are encoded into **ITCH 5.0** messages, framed in **MoldUDP64** packets, and sent over **UDP** (unicast or multicast).
+6. Optionally, events are published to **Kafka** and ingested into **ClickHouse** for SQL analytics.
+7. Python analysis tools read the logs and produce interactive visualisations.
+
+```
+QRSDP Producer ──► Event Log (.qrsdp) ──► Python Notebooks
+       │
+       ├──► Kafka ──► ITCH Encoder ──► MoldUDP64 ──► UDP ──► Listener
+       │
+       └──► Kafka ──► ClickHouse (SQL analytics)
+```
 
 Two intensity models are implemented:
 - **Legacy (SimpleImbalance)**: imbalance-driven rates with flat add, linear cancel, and configurable execution baseline.
@@ -32,8 +40,12 @@ src/
   model/         Intensity models (SimpleImbalance, CurveIntensity, HLR params)
   calibration/   Intensity estimation, curve I/O, and calibration CLI
   sampler/       Event sampler + attribute sampler
-  io/            Event sinks (in-memory, binary file), log reader, format spec
+  io/            Event sinks (in-memory, binary file, multiplex), log reader
   producer/      Producer interface, QRSDP producer, session runner
+  itch/          ITCH 5.0 encoder, MoldUDP64 framer, UDP sender, decoder
+
+tests/           Google Test suite (127 tests across 17 files)
+  core/ io/ book/ model/ calibration/ sampler/ producer/ itch/
 
 notebooks/
   qrsdp_reader.py    Python binary log reader (LZ4 chunk decompression, manifest iteration)
@@ -45,10 +57,10 @@ notebooks/
   04_multi_security_comparison.ipynb  Cross-security price paths, returns, and spread comparison
   05_model_comparison.ipynb           Side-by-side SimpleImbalance vs HLR with calibration
 
-tests/qrsdp/    Google Test suite (94 tests)
 tools/qrsdp_ui/  ImGui + ImPlot real-time debugging UI
+pipeline/        ClickHouse init scripts and schema definitions
 docs/            Project docs, model reviews, audit reports
-docker/          Dockerfiles for headless build, test, and notebook environments
+docker/          Dockerfiles and docker-compose for build, test, and platform stack
 ```
 
 ---
@@ -79,8 +91,10 @@ docker-compose -f docker/docker-compose.yml run --rm simulator
 | `qrsdp_run` | Multi-day session runner — generates datasets with continuous price chaining |
 | `qrsdp_calibrate` | Calibration CLI — estimates HLR intensity curves from `.qrsdp` event logs |
 | `qrsdp_log_info` | Log inspector — prints header, stats, and sample records from a `.qrsdp` file |
+| `qrsdp_itch_stream` | ITCH stream consumer — reads Kafka, encodes ITCH 5.0 over UDP |
+| `qrsdp_listen` | Reference ITCH listener — receives UDP, decodes and prints ITCH messages |
 | `qrsdp_ui` | Real-time debugging UI (ImGui/ImPlot/GLFW) |
-| `tests` | Google Test suite (94 tests) |
+| `tests` | Google Test suite (127 tests across 17 files) |
 
 ---
 
@@ -119,6 +133,19 @@ docker-compose -f docker/docker-compose.yml run --rm simulator
 ./build/tests
 ```
 
+### ITCH Streaming (Docker)
+
+```bash
+# Start the full platform stack (Kafka, ClickHouse, ITCH stream, listener)
+docker compose -f docker/docker-compose.yml --profile platform up -d
+
+# Watch decoded ITCH messages in real time
+docker compose -f docker/docker-compose.yml --profile platform logs -f itch-listener
+
+# Or run the listener locally against a bare-metal multicast group
+./build/qrsdp_listen --multicast-group 239.1.1.1 --port 5001
+```
+
 ### Python Notebooks
 
 ```bash
@@ -137,9 +164,11 @@ Open any of the five notebooks to explore the generated data interactively. The 
 - [Documentation Index](docs/README.md)
 - [Build, Test, and Run](docs/build-test-run.md) — CLI usage, Python setup, notebook guide
 - [Event Log Format](docs/event-log-format.md) — binary `.qrsdp` file format specification
-- [Chunk Size Tuning](docs/chunk-size-tuning.md) — compression vs granularity tradeoff analysis
-- [QRSDP Mechanics](docs/producer/QRSDP_MECHANICS.md)
+- [ITCH Streaming Architecture](docs/itch/ITCH_STREAMING.md) — ITCH 5.0 over UDP, unicast/multicast, Docker setup
+- [Data Platform](docs/data-platform.md) — Kafka, ClickHouse Kafka engine, Docker runbook
+- [QRSDP Mechanics](docs/producer/QRSDP_MECHANICS.md) — method-level producer breakdown
 - [HLR Calibration Pipeline](docs/producer/QRSDP_CALIBRATION.md) — calibration CLI, intensity estimation, curve I/O
+- [Performance Results](docs/performance-results.md) — throughput benchmarks and compression metrics
 - [Model Math & Code Review](docs/06_model_math_and_code_review.md)
 - [SimpleImbalance Audit](docs/07_simple_imbalance_nonsense_audit.md)
 
@@ -160,7 +189,18 @@ Performance: ~5M events/s write throughput, 2.05x LZ4 compression ratio, ~27 MB 
 
 ## Project Status
 
-The QRSDP producer is fully functional with two intensity models, a calibration pipeline for fitting HLR curves from data, a real-time debugging UI, chunked LZ4-compressed binary event logs, a multi-day session runner with multi-security parallel execution, Python analysis tools with interactive Jupyter notebooks, and a comprehensive test suite (94 tests). Docker support is included for headless builds and testing.
+The simulator is feature-complete across event generation, persistence, ITCH streaming, and analytics. Completed milestones:
+
+- **QRSDP event producer** with two intensity models (SimpleImbalance and HLR2014 queue-reactive curves)
+- **HLR calibration pipeline** for fitting intensity curves from recorded event data
+- **Chunked LZ4-compressed binary event logs** (`.qrsdp` format) with indexed random access
+- **Multi-day session runner** with multi-security parallel execution and continuous price chaining
+- **ITCH 5.0 streaming pipeline**: encoder, MoldUDP64 framer, UDP sender (unicast and multicast), reference listener
+- **Data platform**: Kafka dual-write, ClickHouse Kafka engine for SQL analytics
+- **5 interactive Jupyter notebooks** (price visualisation, stylised facts, session summary, multi-security comparison, model comparison)
+- **Real-time debugging UI** (ImGui/ImPlot)
+- **127 tests across 17 files** including unit, integration, and E2E pipeline traceability tests
+- **Docker support** for headless builds, testing, simulation, and the full streaming platform stack
 
 ---
 

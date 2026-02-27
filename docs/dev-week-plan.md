@@ -1,5 +1,11 @@
 # Dev Week Plan — Event Log, Replay, and Visualisation
 
+> **Historical document.** This plan and the [extension plan](dev-week-2-plan.md)
+> were both completed within a single 5-day work week. The tasks below were
+> finished in the first 1-2 days. Some details have since changed:
+> `EventRecord` is now 30 bytes in-memory (26 on disk), and the test suite
+> has grown to 127 tests across 17 files.
+
 **Duration:** 5 days (Monday–Friday)
 **Objective:** Take the working QRSDP producer from in-memory output to persistent, disk-backed event logging with chunked compression, build replay infrastructure, and produce Jupyter notebooks for visualisation and analysis.
 

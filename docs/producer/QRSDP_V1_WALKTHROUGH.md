@@ -1,6 +1,6 @@
 # QRSDP v1 Implementation Walkthrough
 
-This document is a guided tour of what was implemented from `docs/producer/new documents/00_unified_build_plan.md`, written for someone with basic–intermediate C++ knowledge.
+This document is a guided tour of what was implemented from `docs/producer/00_unified_build_plan.md`, written for someone with basic–intermediate C++ knowledge.
 
 ---
 

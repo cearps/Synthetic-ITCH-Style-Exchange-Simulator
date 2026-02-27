@@ -1,5 +1,12 @@
 # Dev Week 2 Plan — Data Platform, ITCH Streaming + Producer Improvements
 
+> **Historical document.** This was an extension plan written after the
+> [initial plan](dev-week-plan.md) was completed in days 1-2 of a single
+> 5-day work week. The remaining days delivered: Kafka integration,
+> ClickHouse Kafka engine, MultiplexSink, and ITCH 5.0 streaming (encoder,
+> MoldUDP64, UDP sender/listener). Not implemented: dbt analytics layer,
+> Hawkes self-exciting model, and correlated multi-security market factor.
+
 **Duration:** 4 days (Monday–Thursday)
 **Objective:** Build a Kafka-based event distribution layer with dual-write from the C++ producer, a ClickHouse analytics store with native Kafka ingestion and dbt, an ITCH 5.0 UDP multicast feed served from Kafka, then add Hawkes self-exciting and correlated multi-security intensity models.
 

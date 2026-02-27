@@ -66,8 +66,7 @@ Because the event log is authoritative, the simulation engine can be replaced or
 
 ## Project Status
 
-This repository is in **early development**.  
-The initial focus is on correctness, determinism, and a minimal but realistic exchange lifecycle before increasing model complexity.
+The simulator is **feature-complete** across event generation, persistence, ITCH 5.0 streaming, and analytics. The QRSDP producer supports two intensity models (SimpleImbalance and HLR2014), a calibration pipeline, multi-day multi-security simulation, ITCH streaming over UDP (unicast and multicast), a Kafka/ClickHouse data platform, five interactive Jupyter analysis notebooks, a real-time debugging UI, and 127 tests across 17 files with full Docker support.
 
 ---
 
