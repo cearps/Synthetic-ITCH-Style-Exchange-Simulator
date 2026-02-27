@@ -1,0 +1,24 @@
+# Override for 100x speed (~4 min per 6.5h session). Default in base compose.
+# Use with: --profile platform
+services:
+  kafka-producer:
+    command:
+      - "--seed"
+      - "42"
+      - "--days"
+      - "0"
+      - "--seconds"
+      - "23400"
+      - "--output"
+      - "/app/output/kafka_run_42"
+      - "--kafka-brokers"
+      - "kafka:9092"
+      - "--kafka-topic"
+      - "exchange.events"
+      - "--securities"
+      - "AAPL:10000,MSFT:15000,GOOG:12000"
+      - "--market-open"
+      - "09:30"
+      - "--realtime"
+      - "--speed"
+      - "100"

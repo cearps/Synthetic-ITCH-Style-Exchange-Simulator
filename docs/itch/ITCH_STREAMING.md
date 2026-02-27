@@ -19,6 +19,55 @@ The `itch-listener` service decodes and prints every ITCH message it receives:
 [seq=3] ADD_ORDER ref=1 side=B shares=1 stock=AAPL     price=100.0000 ts=34200059888858
 ```
 
+## Speed Modes
+
+The producer can pace events to simulated inter-arrival times (`--realtime`) or run at maximum speed. Use speed overrides to control wall-clock duration per session:
+
+| Mode | `--speed` | Wall-clock per 6.5h session | Overnight gap |
+|------|-----------|----------------------------|---------------|
+| Real-time | 1 | 6.5 hours | 5s pause |
+| 10x | 10 | ~39 minutes | 5s pause |
+| 100x | 100 | ~4 minutes | 5s pause |
+| Max | *(no --realtime)* | seconds | none |
+
+### Scripts (Docker)
+
+```bash
+./scripts/run-pipeline.sh [realtime|10x|100x|max] [up|stop|logs]
+```
+
+Examples:
+
+```bash
+./scripts/run-pipeline.sh realtime up    # 1x speed
+./scripts/run-pipeline.sh 100x up         # 100x (default)
+./scripts/run-pipeline.sh max logs        # tail listener output
+./scripts/run-pipeline.sh 100x stop       # stop all services
+```
+
+### Docker Compose overrides
+
+```bash
+docker compose -f docker/docker-compose.yml -f docker/speed-realtime.yml --profile platform up -d
+docker compose -f docker/docker-compose.yml -f docker/speed-10x.yml --profile platform up -d
+docker compose -f docker/docker-compose.yml -f docker/speed-100x.yml --profile platform up -d
+docker compose -f docker/docker-compose.yml -f docker/speed-max.yml --profile platform up -d
+```
+
+### Native CLI (no Docker)
+
+Requires Kafka at `localhost:9092` and compiled binaries in `build/`:
+
+```bash
+./scripts/run-native.sh [realtime|10x|100x|max]
+```
+
+Or run manually in separate terminals: start `qrsdp_listen`, then `qrsdp_itch_stream`, then `qrsdp_run` with `--realtime` and `--speed` as needed.
+
+### Windows
+
+Only shell scripts (`.sh`) are provided for maintainability. On Windows, use **WSL** (Windows Subsystem for Linux) to run the scripts, or run the equivalent `docker compose` commands directly in PowerShell.
+
 ## Transport Modes
 
 ### Unicast (Docker default)

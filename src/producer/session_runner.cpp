@@ -426,6 +426,11 @@ static std::vector<DayResult> runSecurityDays(
 
         next_p0 = close_ticks;
         current_date = nextBusinessDay(current_date);
+
+        if (config.realtime && (infinite || day_idx + 1 < config.num_days)) {
+            std::printf("[%s] overnight pause (5s)...\n", symbol.c_str());
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+        }
     }
 
     return days;

@@ -137,12 +137,20 @@ docker-compose -f docker/docker-compose.yml run --rm simulator
 
 ```bash
 # Start the full platform stack (Kafka, ClickHouse, ITCH stream, listener)
-docker compose -f docker/docker-compose.yml --profile platform up -d
+./scripts/run-pipeline.sh 100x up    # 100x speed (~4 min per session)
+# Or: realtime (1x), 10x, max (no pacing)
 
 # Watch decoded ITCH messages in real time
+./scripts/run-pipeline.sh 100x logs
+
+# Or use docker compose directly (single commands, no scripts)
+docker compose -f docker/docker-compose.yml -f docker/speed-realtime.yml --profile platform up -d   # 1x
+docker compose -f docker/docker-compose.yml -f docker/speed-10x.yml --profile platform up -d      # 10x
+docker compose -f docker/docker-compose.yml -f docker/speed-100x.yml --profile platform up -d      # 100x
+docker compose -f docker/docker-compose.yml -f docker/speed-max.yml --profile platform up -d       # max
 docker compose -f docker/docker-compose.yml --profile platform logs -f itch-listener
 
-# Or run the listener locally against a bare-metal multicast group
+# Run the listener locally against a bare-metal multicast group
 ./build/qrsdp_listen --multicast-group 239.1.1.1 --port 5001
 ```
 
