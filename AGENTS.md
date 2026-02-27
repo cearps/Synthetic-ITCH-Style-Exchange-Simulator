@@ -45,6 +45,21 @@ cd notebooks && source venv/bin/activate
 
 The venv at `notebooks/venv/` has all dependencies from `notebooks/requirements.txt`. Python reader API: `qrsdp_reader.iter_days()` yields `(date, records)`, `qrsdp_reader.iter_securities()` yields `(symbol, date, records)`.
 
+### Web frontend + API
+
+**API (Python FastAPI):** Wraps the C++ engine. Start with:
+```bash
+source notebooks/venv/bin/activate
+python -m uvicorn api.main:app --host 0.0.0.0 --port 8000
+```
+
+**Frontend (React+Vite):** Connects to the API. Start with:
+```bash
+cd frontend && npm install && npx vite --host 0.0.0.0 --port 5173
+```
+
+The Vite dev server proxies `/api` to `localhost:8000`. Both must be running for the full experience. The frontend is at `http://localhost:5173`.
+
 ### Streaming platform (optional, Docker)
 
 Kafka + ClickHouse + ITCH streaming runs via Docker Compose `platform` profile. See `docs/build-test-run.md` and `docs/data-platform.md`. Not required for core development.
