@@ -98,7 +98,7 @@ Implementation: cumulative sum over the six intensities; first type where `U < c
 
 ### 3.1 Main Event Loop
 
-**File:** `src/qrsdp/qrsdp_producer.cpp`
+**File:** `src/producer/qrsdp_producer.cpp`
 **Method:** `QrsdpProducer::stepOneEvent()`
 
 ```cpp
@@ -130,7 +130,7 @@ sink.append(rec);
 
 ### 3.2 Exponential Sampling: Δt = −ln(U) / Λ
 
-**File:** `src/qrsdp/competing_intensity_sampler.cpp`
+**File:** `src/sampler/competing_intensity_sampler.cpp`
 **Method:** `CompetingIntensitySampler::sampleDeltaT()`
 
 ```cpp
@@ -147,7 +147,7 @@ double CompetingIntensitySampler::sampleDeltaT(double lambdaTotal) {
 
 ### 3.3 Categorical Event Type Selection
 
-**File:** `src/qrsdp/competing_intensity_sampler.cpp`
+**File:** `src/sampler/competing_intensity_sampler.cpp`
 **Method:** `CompetingIntensitySampler::sampleType()`
 
 ```cpp
@@ -166,7 +166,7 @@ return EventType::EXECUTE_SELL;  // fallback for rounding
 
 ### 3.4 Feature Extraction: Imbalance
 
-**File:** `src/qrsdp/multi_level_book.cpp`
+**File:** `src/book/multi_level_book.cpp`
 **Method:** `MultiLevelBook::features()`
 
 ```cpp
@@ -178,7 +178,7 @@ Implements: $I = \frac{q^b - q^a}{q^b + q^a + \varepsilon}$, where ε = 10⁻⁹
 
 ### 3.5 RNG: Seeding and Uniformity
 
-**File:** `src/qrsdp/mt19937_rng.cpp`
+**File:** `src/rng/mt19937_rng.cpp`
 
 ```cpp
 Mt19937Rng::Mt19937Rng(uint64_t seed) : gen_(seed), dist_(0.0, 1.0) {}
@@ -194,7 +194,7 @@ Uses `std::mt19937_64` with `std::uniform_real_distribution<double>(0.0, 1.0)`. 
 
 ### 4.1 Legacy Model: SimpleImbalanceIntensity
 
-**File:** `src/qrsdp/simple_imbalance_intensity.cpp`
+**File:** `src/model/simple_imbalance_intensity.cpp`
 
 Given imbalance I, best-level depths q_b, q_a, and parameters (base_L, base_M, base_C, ε_exec):
 
@@ -250,7 +250,7 @@ With Debug Preset (M=30, ε=0.2, L=5, C=0.1, depth=2, K=5, α=0.5): 6.0 + 0.04 >
 
 ### 4.2 HLR2014 Model: CurveIntensityModel
 
-**File:** `src/qrsdp/curve_intensity_model.cpp`
+**File:** `src/model/curve_intensity_model.cpp`
 
 Each event type at each level has a **queue-size-dependent** intensity curve:
 
@@ -274,7 +274,7 @@ $$
 
 The per-level intensities are stored in a flat vector of size 4K+2, and when present, the producer samples directly from this vector (not from the 6-way aggregate). This gives **joint (type, level) selection in one draw**.
 
-**Default curves** (file: `src/qrsdp/hlr_params.cpp`):
+**Default curves** (file: `src/model/hlr_params.cpp`):
 
 | Curve | Formula | Rationale |
 |---|---|---|
@@ -326,7 +326,7 @@ A shift occurs when **any** event reduces the best level's depth to zero:
 - CANCEL_BID depletes best bid (level index 0) → `shiftBidBook()`
 - CANCEL_ASK depletes best ask (level index 0) → `shiftAskBook()`
 
-**File:** `src/qrsdp/multi_level_book.cpp`, lines 80–127.
+**File:** `src/book/multi_level_book.cpp`, lines 80–127.
 
 ### 5.2 What Happens During a Shift
 
@@ -350,7 +350,7 @@ Net effect: mid-price moves up by 1 tick. Spread unchanged. The new best ask is 
 
 ### 5.3 Optional Reinitialize After Shift
 
-**File:** `src/qrsdp/qrsdp_producer.cpp`, lines 81–86.
+**File:** `src/producer/qrsdp_producer.cpp`, lines 81–86.
 
 ```cpp
 if (shift_occurred) {

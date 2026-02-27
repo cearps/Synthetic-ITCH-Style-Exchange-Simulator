@@ -22,7 +22,7 @@ Optional:
 | `qrsdp_cli` | Single-session CLI (quick runs, debugging) | always built |
 | `qrsdp_run` | Multi-day session runner (generates datasets) | always built |
 | `qrsdp_log_info` | Log file inspector (prints header, stats, samples) | always built |
-| `tests` | Google Test suite (98 cases) | `BUILD_TESTING=ON` (default) |
+| `tests` | Google Test suite (127 cases) | `BUILD_TESTING=ON` (default) |
 | `qrsdp_ui` | ImGui real-time debugging UI | `BUILD_QRSDP_UI=ON` (default) |
 
 Kafka support is compiled separately and off by default (no librdkafka needed for core development):
@@ -444,7 +444,7 @@ third_party/
 pipeline/
   clickhouse/    init.sql (Kafka engine + MergeTree schema), init.sh (entrypoint)
 
-tests/qrsdp/    test files, 98 test cases
+tests/           test files (127 test cases across 17 files)
 tools/qrsdp_ui/  ImGui + ImPlot real-time debugging UI
 ```
 

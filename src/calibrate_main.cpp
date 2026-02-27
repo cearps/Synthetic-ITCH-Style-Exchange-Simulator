@@ -288,10 +288,8 @@ int main(int argc, char* argv[]) {
             auto maxObs = [](const qrsdp::IntensityEstimator& e) {
                 return static_cast<int>(e.nMaxObserved());
             };
-            std::printf("  Level %d (bid): add nmax=%d  cancel nmax=%d\n", i,
-                        maxObs(bid_estimators[si]), maxObs(bid_estimators[si]));
-            std::printf("  Level %d (ask): add nmax=%d  cancel nmax=%d\n", i,
-                        maxObs(ask_estimators[si]), maxObs(ask_estimators[si]));
+            std::printf("  Level %d (bid): nmax=%d\n", i, maxObs(bid_estimators[si]));
+            std::printf("  Level %d (ask): nmax=%d\n", i, maxObs(ask_estimators[si]));
 
             auto printSample = [](const char* label, const qrsdp::IntensityCurve& c) {
                 std::printf("    %s: n=0:%.2f n=1:%.2f n=5:%.2f n=10:%.2f n=20:%.2f n=50:%.2f\n",

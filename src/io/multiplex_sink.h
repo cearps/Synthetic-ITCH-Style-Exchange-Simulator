@@ -3,6 +3,7 @@
 #include "io/i_event_sink.h"
 
 #include <cstdio>
+#include <exception>
 #include <vector>
 
 namespace qrsdp {

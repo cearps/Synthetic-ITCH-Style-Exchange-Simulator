@@ -11,7 +11,7 @@
 
 ### 1.1 Intensity Formulas (as coded)
 
-From `src/qrsdp/simple_imbalance_intensity.cpp`:
+From `src/model/simple_imbalance_intensity.cpp`:
 
 ```cpp
 const double I = std::isnan(f.imbalance) ? 0.0 : f.imbalance;
@@ -431,7 +431,7 @@ Starting at $q=76$, reaching 0 requires a $-3.3\sigma$ fluctuation — probabili
 
 **Severity:** Minor
 **Description:** `imbalance_sensitivity` and `cancel_sensitivity` are declared in `IntensityParams` but never read by `SimpleImbalanceIntensity::compute()` or any other code.
-**Location:** `src/qrsdp/records.h:33-34`
+**Location:** `src/core/records.h:33-34`
 **Why it matters:** Dead fields create confusion about what the model actually does. A reader might expect these to scale the imbalance or cancel terms, but they have no effect.
 **Suggested correction:** Remove the fields, or wire them into the formulas as:
 

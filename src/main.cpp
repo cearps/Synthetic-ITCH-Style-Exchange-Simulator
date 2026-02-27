@@ -29,7 +29,7 @@ int main(int argc, char* argv[]) {
 
     qrsdp::Mt19937Rng rng(seed);
     qrsdp::MultiLevelBook book;
-    qrsdp::IntensityParams params{22.0, 0.2, 30.0, 1.0, 1.0, 0.5, 0.0};
+    qrsdp::IntensityParams params{20.0, 0.5, 15.0, 1.0, 1.0, 0.5, 0.4};
     qrsdp::SimpleImbalanceIntensity model(params);
     qrsdp::CompetingIntensitySampler sampler(rng);
     qrsdp::UnitSizeAttributeSampler attrs(rng, 0.5);

@@ -12,7 +12,7 @@ This document is a guided tour of what was implemented from `docs/producer/new d
 | **IOrderBook:** Plan lists only `seed`, `features`, `apply`, `bestBid`, `bestAsk`. | We added `numLevels()`, `bidPriceAtLevel(k)`, `askPriceAtLevel(k)`. | The attribute sampler must choose a **level index** k and then get the **price** at that level. The plan says “map to price_ticks at that level”; that requires the book to expose “price at level k”. So we extended the interface; `MultiLevelBook` implements these. |
 | **IProducer dependencies:** Plan says producer gets Book, Model, Sampler, AttributeSampler, Sink. | We also inject **IRng** and the producer calls `rng.seed(session.seed)` at the start of `runSession`. | Determinism requires the RNG to be reseeded per session. The producer is the only place that sees `TradingSession.seed` and runs the session, so it seeds the RNG there. The plan says “RNG must be injected and seed-controlled”; having the producer seed it keeps the same API (one `runSession` call) and guarantees same seed ⇒ same stream. |
 | **EventRecord size:** Plan says “stable layout (static_assert size)” but does not give a number. | We use **30 bytes** and `static_assert(sizeof(EventRecord) == 30)`. | With `#pragma pack(push, 1)`: 8+1+1+4+4+8+4 = 30. We fixed the size so the layout is portable and testable. |
-| **Repository layout:** Plan suggests `/producer/include` and `/producer/src`. | We put everything under **`src/qrsdp/`** and **`tests/qrsdp/`**. | The repo already had `src/core`, `src/producer`, etc., and a single `include_directories(src)`. We kept that convention and put all QRSDP headers and sources under `src/qrsdp/` so no CMake or include-path changes were needed beyond adding files. |
+| **Repository layout:** Plan suggests `/producer/include` and `/producer/src`. | We put everything under subdirectories of **`src/`** (e.g. `src/producer/`, `src/book/`, `src/model/`, etc.) and **`tests/`** (e.g. `tests/core/`, `tests/producer/`, `tests/book/`, etc.). | The repo uses `src/core`, `src/producer`, `src/book`, `src/model`, `src/sampler`, `src/rng`, `src/io`, `src/itch` and a single `include_directories(src)`. Tests mirror this under `tests/`. |
 | **BookSeed / initial_depth:** Plan does not put `initial_depth` in `TradingSession`. | `TradingSession` has **`initial_depth`** (0 = use producer default 50) and **`initial_spread_ticks`** (0 = default 2). | Session-level control for tests and configs; producer passes them into `BookSeed` when seeding the book. |
 | **IEventSink:** Plan says v1 has only `append(EventRecord)`. | We implemented exactly that. No `openDay`/`flush`/`close` in the interface. | Plan §5.5 says v1 sink is in-memory with just `append`; we did not add file-style lifecycle. |
 
@@ -22,7 +22,7 @@ Everything else (continuous-time loop, exponential + categorical sampling, inten
 
 ## 2) High-level architecture: files and components
 
-All QRSDP code lives under **`src/qrsdp/`** and **`tests/qrsdp/`**. The main executable (`itch_simulator`) does **not** use the QRSDP producer yet; it still uses the older exchange simulator. The new code is used only by the test binary.
+All QRSDP code lives under subdirectories of **`src/`** (`src/producer/`, `src/book/`, `src/model/`, `src/sampler/`, `src/rng/`, `src/core/`, `src/io/`, `src/itch/`) with tests under **`tests/`** (`tests/core/`, `tests/producer/`, `tests/book/`, etc.). The CLI executables are `qrsdp_cli`, `qrsdp_run`, `qrsdp_calibrate`, `qrsdp_log_info`, `qrsdp_itch_stream`, and `qrsdp_listen`.
 
 **Interfaces (headers only; no .cpp):**
 
@@ -446,7 +446,7 @@ docker-compose -f docker/docker-compose.yml run --rm test /app/build/tests --gte
 
 ### Run a short simulation and print events
 
-The **TraceShiftAndPrintFirst20** test (see §11) runs a 2 s session with initial_depth=1, replays events, and prints the first 20 events plus best bid/ask after each. Use the filter above. There is no dedicated main in `itch_simulator` for QRSDP; that executable is the old exchange simulator. For a custom run you could add a small test or a standalone `qrsdp_run` target that wires the same components and prints events.
+The **TraceShiftAndPrintFirst20** test (see §11) runs a 2 s session with initial_depth=1, replays events, and prints the first 20 events plus best bid/ask after each. Use the filter above. For a custom run, use `qrsdp_run` (multi-day, multi-symbol CLI) or `qrsdp_cli` (simple single-session CLI).
 
 ---
 

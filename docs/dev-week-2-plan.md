@@ -23,7 +23,7 @@ The following was delivered in Week 1 and is complete, tested, and committed:
 | Manifest v1.0 (single-security) and v1.1 (multi-security) formats | Done |
 | Python binary log reader with lazy chunk iteration and manifest support | Done |
 | 5 Jupyter notebooks (price visualisation, stylised facts, session summary, multi-security, model comparison) | Done |
-| Google Test suite (94 tests across 12 files) | Done |
+| Google Test suite (127 tests across 17 files) | Done |
 | Docker support (build, test, notebooks) | Done |
 | Headless CLI (`qrsdp_cli`), multi-day runner (`qrsdp_run`), log inspector (`qrsdp_log_info`), calibrator (`qrsdp_calibrate`) | Done |
 
@@ -108,7 +108,7 @@ The following was delivered in Week 1 and is complete, tested, and committed:
    - Add to `RunConfig`: `std::string kafka_brokers` and `std::string kafka_topic`
    - Add CLI flags to `src/run_main.cpp`: `--kafka-brokers <host:port>`, `--kafka-topic <name>` (default: `exchange.events`)
 
-5. **Tests**: `tests/qrsdp/test_multiplex_sink.cpp` — verify fanout to 2+ mock sinks, verify one sink failure doesn't block others
+5. **Tests**: `tests/io/test_multiplex_sink.cpp` — verify fanout to 2+ mock sinks, verify one sink failure doesn't block others
 
 ### Infrastructure
 
@@ -215,9 +215,9 @@ The following was delivered in Week 1 and is complete, tested, and committed:
    - Useful for testing and demos
 
 8. **Tests**
-   - `tests/qrsdp/test_itch_encoder.cpp`: encode each event type, verify message size + type byte, verify big-endian field ordering, verify match number increments on executions
-   - `tests/qrsdp/test_moldudp64.cpp`: header layout, sequence number progression, message count, MTU splitting
-   - `tests/qrsdp/test_udp_roundtrip.cpp`: localhost loopback send/receive, decode and verify ITCH messages match originals
+   - `tests/itch/test_itch_encoder.cpp`: encode each event type, verify message size + type byte, verify big-endian field ordering, verify match number increments on executions
+   - `tests/itch/test_moldudp64.cpp`: header layout, sequence number progression, message count, MTU splitting
+   - `tests/itch/test_udp_roundtrip.cpp`: localhost loopback send/receive, decode and verify ITCH messages match originals
 
 **End of day:** Run `docker compose --profile platform up` to start the full stack, then in a separate terminal `qrsdp_listen --port 5001` shows a live stream of decoded ITCH messages. The ITCH consumer independently processes events from Kafka with no coupling to the producer process.
 
@@ -257,7 +257,7 @@ The following was delivered in Week 1 and is complete, tested, and committed:
    - Add CLI flags: `--hawkes-alpha`, `--hawkes-beta`, `--hawkes-cap` with sensible defaults
    - Update `runSecurityDays()` in `session_runner.cpp` to accept a model selector and instantiate accordingly
 
-4. **Tests** (`tests/qrsdp/test_hawkes_intensity.cpp`)
+4. **Tests** (`tests/model/test_hawkes_intensity.cpp`)
    - Verify excitation decays: after a burst of events, check that excitation decreases exponentially over time
    - Verify cap: with high alpha, excitation should not exceed `max_excitation`
    - Verify decorator: with `alpha=0`, output should exactly match the base model
@@ -408,12 +408,12 @@ docker/
 docs/
   data-platform.md                  Day 6 (architecture + runbook)
 
-tests/qrsdp/
-  test_multiplex_sink.cpp           Day 6
-  test_itch_encoder.cpp             Day 7
-  test_moldudp64.cpp                Day 7
-  test_udp_roundtrip.cpp            Day 7
-  test_hawkes_intensity.cpp         Day 8
+tests/
+  io/test_multiplex_sink.cpp        Day 6
+  itch/test_itch_encoder.cpp        Day 7
+  itch/test_moldudp64.cpp           Day 7
+  itch/test_udp_roundtrip.cpp       Day 7
+  model/test_hawkes_intensity.cpp   Day 8
 
 notebooks/
   06_hawkes_comparison.ipynb        Day 8

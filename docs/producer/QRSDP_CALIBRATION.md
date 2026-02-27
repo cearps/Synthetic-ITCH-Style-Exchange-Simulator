@@ -233,7 +233,7 @@ A single curve is stored as:
 
 ## 9. Tests
 
-**File:** `tests/qrsdp/test_calibration.cpp`
+**File:** `tests/calibration/test_calibration.cpp`
 
 - **IntensityEstimator.LambdaTotalAndType** — record sojourns at n=5, verify Λ̂(5) and λ̂_type(5).
 - **IntensityCurveIo.SaveAndLoad** — save a 3-point curve to JSON, load it back, verify values.
@@ -241,7 +241,7 @@ A single curve is stored as:
 - **HLRParamsIo.LoadBadPathFails** — loading nonexistent file returns false.
 - **HLRParams.DefaultsHaveSpreadSensitivity** — verify defaults have spread_sensitivity=0.3 and marketCurve(0)=0.
 
-Run: `ctest` or the `tests` target (94 tests total).
+Run: `ctest` or the `tests` target (127 tests total).
 
 ---
 
