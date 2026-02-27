@@ -15,6 +15,19 @@ interface Props {
   history: PricePoint[];
 }
 
+const COLORS = {
+  bid: "#5E985D",
+  bidBright: "#72b871",
+  ask: "#c53030",
+  askBright: "#e05252",
+  mid: "#4a8eff",
+  grid: "rgba(255,255,255,0.04)",
+  tick: "#555c66",
+  tooltipBg: "#111921",
+  tooltipBorder: "rgba(255,255,255,0.08)",
+  tooltipLabel: "#8b919a",
+};
+
 function formatTime(ts: number): string {
   const h = Math.floor(ts / 3600);
   const m = Math.floor((ts % 3600) / 60);
@@ -95,27 +108,72 @@ export default function PriceChart({ history }: Props) {
         <ScaleSelector scale={scale} setScale={setScale} />
       </div>
       <ResponsiveContainer width="100%" height={300}>
-        <AreaChart data={data} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
+        <AreaChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: 8 }}>
           <defs>
             <linearGradient id="bidGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#22c55e" stopOpacity={0.15} />
-              <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+              <stop offset="0%" stopColor={COLORS.bid} stopOpacity={0.20} />
+              <stop offset="100%" stopColor={COLORS.bid} stopOpacity={0} />
             </linearGradient>
             <linearGradient id="askGrad" x1="0" y1="1" x2="0" y2="0">
-              <stop offset="5%" stopColor="#ef4444" stopOpacity={0.15} />
-              <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+              <stop offset="0%" stopColor={COLORS.ask} stopOpacity={0.15} />
+              <stop offset="100%" stopColor={COLORS.ask} stopOpacity={0} />
             </linearGradient>
           </defs>
-          <XAxis dataKey="time" tick={{ fontSize: 10, fill: "#94a3b8" }} interval="preserveStartEnd" minTickGap={50} />
-          <YAxis domain={[yMin, yMax]} tick={{ fontSize: 11, fill: "#94a3b8" }} tickFormatter={(v: number) => `$${v.toFixed(2)}`} width={70} />
+          <XAxis
+            dataKey="time"
+            tick={{ fontSize: 10, fill: COLORS.tick }}
+            axisLine={{ stroke: COLORS.grid }}
+            tickLine={false}
+            interval="preserveStartEnd"
+            minTickGap={50}
+          />
+          <YAxis
+            domain={[yMin, yMax]}
+            tick={{ fontSize: 11, fill: COLORS.tick }}
+            axisLine={false}
+            tickLine={false}
+            tickFormatter={(v: number) => `$${v.toFixed(2)}`}
+            width={68}
+          />
           <Tooltip
-            contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }}
-            labelStyle={{ color: "#94a3b8" }}
+            contentStyle={{
+              background: COLORS.tooltipBg,
+              border: `1px solid ${COLORS.tooltipBorder}`,
+              borderRadius: 10,
+              fontSize: 12,
+              padding: "10px 14px",
+              boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+            }}
+            labelStyle={{ color: COLORS.tooltipLabel, marginBottom: 4 }}
+            itemStyle={{ padding: "1px 0" }}
             formatter={(value: number, name: string) => [`$${value.toFixed(4)}`, name]}
           />
-          <Area type="monotone" dataKey="bid" stroke="#22c55e" fill="url(#bidGrad)" strokeWidth={1} dot={false} isAnimationActive={false} />
-          <Area type="monotone" dataKey="ask" stroke="#ef4444" fill="url(#askGrad)" strokeWidth={1} dot={false} isAnimationActive={false} />
-          <Line type="monotone" dataKey="mid" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} />
+          <Area
+            type="monotone"
+            dataKey="bid"
+            stroke={COLORS.bid}
+            fill="url(#bidGrad)"
+            strokeWidth={1.2}
+            dot={false}
+            isAnimationActive={false}
+          />
+          <Area
+            type="monotone"
+            dataKey="ask"
+            stroke={COLORS.ask}
+            fill="url(#askGrad)"
+            strokeWidth={1.2}
+            dot={false}
+            isAnimationActive={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="mid"
+            stroke={COLORS.mid}
+            strokeWidth={2}
+            dot={false}
+            isAnimationActive={false}
+          />
         </AreaChart>
       </ResponsiveContainer>
     </div>
