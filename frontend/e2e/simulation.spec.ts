@@ -26,7 +26,7 @@ test.describe("Simulation workflow", () => {
     await expect(page.locator(".sim-symbol")).toContainText("E2E", { timeout: 30_000 });
     await expect(page.locator(".sim-status")).toContainText("ready", { ignoreCase: true });
 
-    await page.click('button:has-text("Stream")');
+    await page.click('button:has-text("Replay")');
 
     await expect(page.locator(".sim-view-header h2")).toContainText("E2E", { timeout: 10_000 });
 
@@ -48,7 +48,7 @@ test.describe("Simulation workflow", () => {
 
   test("duplicate symbol shows error", async ({ page, request }) => {
     await request.post("/api/simulations", {
-      data: { symbol: "DUP", seconds: 60, days: 1, seed: 1, speed: 1000, p0: 100 },
+      data: { symbol: "DUP", seconds: 60, days: 1, seed: 1, p0: 100 },
     });
 
     await page.goto("/");

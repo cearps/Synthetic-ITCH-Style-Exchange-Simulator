@@ -2,6 +2,7 @@ import type { Simulation, TickUpdate, NightUpdate, PricePoint, OrderEvent } from
 import OrderBook from "./OrderBook";
 import PriceChart from "./PriceChart";
 import EventFeed from "./EventFeed";
+import PlaybackControls from "./PlaybackControls";
 
 interface Props {
   sim: Simulation;
@@ -9,12 +10,20 @@ interface Props {
   night: NightUpdate | null;
   done: boolean;
   streaming: boolean;
+  paused: boolean;
+  replaySpeed: number;
   priceHistory: PricePoint[];
   eventFeed: OrderEvent[];
+  onSetSpeed: (speed: number) => void;
+  onPause: () => void;
+  onResume: () => void;
   onStop: () => void;
 }
 
-export default function SimulationView({ sim, tick, night, done, streaming, priceHistory, eventFeed, onStop }: Props) {
+export default function SimulationView({
+  sim, tick, night, done, streaming, paused, replaySpeed,
+  priceHistory, eventFeed, onSetSpeed, onPause, onResume, onStop,
+}: Props) {
   const pct = tick ? Math.round((tick.idx / tick.total) * 100) : done ? 100 : 0;
   const dayLabel = tick ? `Day ${tick.day}/${tick.totalDays} · ${tick.date}` : "";
 
@@ -24,8 +33,9 @@ export default function SimulationView({ sim, tick, night, done, streaming, pric
         <div>
           <h2>{sim.symbol}</h2>
           <span className="sim-view-meta">
-            ${sim.p0} · Seed {sim.seed} · {sim.speed}x · {sim.days}d
+            ${sim.p0} · Seed {sim.seed} · {sim.days}d
             {dayLabel && <> · {dayLabel}</>}
+            {streaming && <> · <span className="replay-badge">{paused ? "PAUSED" : `${replaySpeed}x`}</span></>}
           </span>
         </div>
         {tick && (
@@ -38,12 +48,23 @@ export default function SimulationView({ sim, tick, night, done, streaming, pric
         )}
         <div className="sim-view-controls">
           <div className="progress-info">
-            {done ? "Complete" : `${pct}%`} · {(tick?.idx ?? 0).toLocaleString()} / {(tick?.total ?? sim.total_events).toLocaleString()}
+            {done ? "Complete" : paused ? "Paused" : `${pct}%`} · {(tick?.idx ?? 0).toLocaleString()} / {(tick?.total ?? sim.total_events).toLocaleString()}
           </div>
           <div className="progress-bar"><div className="progress-fill" style={{ width: `${pct}%` }} /></div>
-          {streaming && !done && <button className="btn-stop" onClick={onStop}>Stop</button>}
         </div>
       </div>
+
+      {streaming && (
+        <PlaybackControls
+          speed={replaySpeed}
+          paused={paused}
+          done={done}
+          onSetSpeed={onSetSpeed}
+          onPause={onPause}
+          onResume={onResume}
+          onStop={onStop}
+        />
+      )}
 
       {night && (
         <div className="night-overlay">

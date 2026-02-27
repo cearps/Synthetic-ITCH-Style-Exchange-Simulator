@@ -11,7 +11,6 @@ export default function CreateSimulation({ onCreate }: Props) {
   const [seconds, setSeconds] = useState(23400);
   const [days, setDays] = useState(5);
   const [seed, setSeed] = useState(42);
-  const [speed, setSpeed] = useState(500);
   const [p0, setP0] = useState(150);
   const [preset, setPreset] = useState("simple_high_exec");
   const [loading, setLoading] = useState(false);
@@ -37,7 +36,6 @@ export default function CreateSimulation({ onCreate }: Props) {
         seconds,
         days,
         seed,
-        speed,
         p0,
         preset,
       });
@@ -114,27 +112,15 @@ export default function CreateSimulation({ onCreate }: Props) {
           )}
         </div>
       )}
-      <div className="form-row">
-        <label className="half">
-          Seed
-          <input
-            type="number"
-            value={seed}
-            onChange={(e) => setSeed(Number(e.target.value))}
-            min={1}
-          />
-        </label>
-        <label className="half">
-          Speed
-          <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
-            <option value={50}>50x</option>
-            <option value={100}>100x</option>
-            <option value={200}>200x</option>
-            <option value={500}>500x</option>
-            <option value={1000}>1000x</option>
-          </select>
-        </label>
-      </div>
+      <label>
+        Seed
+        <input
+          type="number"
+          value={seed}
+          onChange={(e) => setSeed(Number(e.target.value))}
+          min={1}
+        />
+      </label>
       {error && <div className="form-error">{error}</div>}
       <button type="submit" disabled={loading || !symbol.trim()}>
         {loading ? "Generating..." : "Create Simulation"}

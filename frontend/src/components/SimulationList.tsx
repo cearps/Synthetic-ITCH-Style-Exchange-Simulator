@@ -4,7 +4,7 @@ import type { Simulation } from "../types";
 interface Props {
   sims: Simulation[];
   activeSim: Simulation | null;
-  onView: (sim: Simulation) => void;
+  onReplay: (sim: Simulation) => void;
   onDelete: (id: string) => void;
   onRefresh: () => void;
 }
@@ -15,7 +15,7 @@ function fmtEvents(n: number) {
   return String(n);
 }
 
-export default function SimulationList({ sims, activeSim, onView, onDelete, onRefresh }: Props) {
+export default function SimulationList({ sims, activeSim, onReplay, onDelete, onRefresh }: Props) {
   useEffect(() => { onRefresh(); }, [onRefresh]);
 
   return (
@@ -32,8 +32,8 @@ export default function SimulationList({ sims, activeSim, onView, onDelete, onRe
             {fmtEvents(s.total_events)} events · {s.days}d · ${s.p0} · seed {s.seed}
           </div>
           <div className="sim-card-actions">
-            <button className="btn-stream" onClick={() => onView(s)} disabled={s.status !== "ready"}>
-              Stream
+            <button className="btn-stream" onClick={() => onReplay(s)} disabled={s.status !== "ready"}>
+              Replay
             </button>
             <button className="btn-delete" onClick={() => onDelete(s.id)}>Delete</button>
           </div>

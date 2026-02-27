@@ -5,6 +5,7 @@ import SimulationList from "./components/SimulationList";
 import SimulationView from "./components/SimulationView";
 
 const API = "/api";
+const DEFAULT_REPLAY_SPEED = 500;
 
 export default function App() {
   const [sims, setSims] = useState<Simulation[]>([]);
@@ -13,6 +14,8 @@ export default function App() {
   const [night, setNight] = useState<NightUpdate | null>(null);
   const [done, setDone] = useState(false);
   const [streaming, setStreaming] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [replaySpeed, setReplaySpeed] = useState(DEFAULT_REPLAY_SPEED);
   const [priceHistory, setPriceHistory] = useState<PricePoint[]>([]);
   const [eventFeed, setEventFeed] = useState<OrderEvent[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
@@ -23,7 +26,7 @@ export default function App() {
       if (!res.ok) return;
       setSims(await res.json());
     } catch {
-      // network error on initial load — silently retry on next interaction
+      // network error on initial load
     }
   }, []);
 
@@ -45,20 +48,41 @@ export default function App() {
     []
   );
 
-  const handleView = useCallback(
+  const sendControl = useCallback((msg: Record<string, unknown>) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(msg));
+    }
+  }, []);
+
+  const handleSetSpeed = useCallback((speed: number) => {
+    sendControl({ type: "set_speed", speed });
+  }, [sendControl]);
+
+  const handlePause = useCallback(() => {
+    sendControl({ type: "pause" });
+  }, [sendControl]);
+
+  const handleResume = useCallback(() => {
+    sendControl({ type: "resume" });
+  }, [sendControl]);
+
+  const handleReplay = useCallback(
     (sim: Simulation) => {
       if (wsRef.current) wsRef.current.close();
       setActiveSim(sim);
       setLastTick(null);
       setNight(null);
       setDone(false);
+      setPaused(false);
+      setReplaySpeed(DEFAULT_REPLAY_SPEED);
       setPriceHistory([]);
       setEventFeed([]);
       setStreaming(true);
 
       const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
       const socket = new WebSocket(
-        `${proto}//${window.location.host}${API}/simulations/${sim.id}/stream`
+        `${proto}//${window.location.host}${API}/simulations/${sim.id}/stream?speed=${DEFAULT_REPLAY_SPEED}`
       );
 
       socket.onmessage = (e) => {
@@ -72,6 +96,7 @@ export default function App() {
         if (msg.type === "tick") {
           setLastTick(msg);
           setNight(null);
+          setReplaySpeed(msg.speed);
           const absT = msg.dayOffset + msg.ts;
           setPriceHistory((prev) => [
             ...prev,
@@ -85,18 +110,23 @@ export default function App() {
         } else if (msg.type === "complete") {
           setDone(true);
           setStreaming(false);
+        } else if (msg.type === "playback_init") {
+          setReplaySpeed(msg.speed);
+          setPaused(msg.paused);
+        } else if (msg.type === "speed_changed") {
+          setReplaySpeed(msg.speed);
+        } else if (msg.type === "paused") {
+          setPaused(true);
+        } else if (msg.type === "resumed") {
+          setPaused(false);
         }
       };
 
-      socket.onerror = () => {
-        setStreaming(false);
-      };
-
+      socket.onerror = () => setStreaming(false);
       socket.onclose = () => {
         setStreaming(false);
         wsRef.current = null;
       };
-
       wsRef.current = socket;
     },
     []
@@ -142,7 +172,7 @@ export default function App() {
           <SimulationList
             sims={sims}
             activeSim={activeSim}
-            onView={handleView}
+            onReplay={handleReplay}
             onDelete={handleDelete}
             onRefresh={refreshSims}
           />
@@ -155,15 +185,20 @@ export default function App() {
               night={night}
               done={done}
               streaming={streaming}
+              paused={paused}
+              replaySpeed={replaySpeed}
               priceHistory={priceHistory}
               eventFeed={eventFeed}
+              onSetSpeed={handleSetSpeed}
+              onPause={handlePause}
+              onResume={handleResume}
               onStop={handleStop}
             />
           ) : activeSim && streaming ? (
-            <div className="placeholder">Connecting to stream...</div>
+            <div className="placeholder">Connecting to replay...</div>
           ) : (
             <div className="placeholder">
-              <p>Create a simulation and click Stream to view real-time data</p>
+              <p>Create a simulation and click Replay to view real-time data</p>
             </div>
           )}
         </main>

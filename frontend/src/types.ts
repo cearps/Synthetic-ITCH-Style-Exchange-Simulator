@@ -4,7 +4,6 @@ export interface Simulation {
   seconds: number;
   days: number;
   seed: number;
-  speed: number;
   p0: number;
   status: string;
   total_events: number;
@@ -47,6 +46,7 @@ export interface TickUpdate {
   bids: Level[];
   asks: Level[];
   events: OrderEvent[];
+  speed: number;
 }
 
 export interface NightUpdate {
@@ -64,7 +64,34 @@ export interface CompleteUpdate {
   totalDays: number;
 }
 
-export type StreamMessage = TickUpdate | NightUpdate | CompleteUpdate | { type: "error"; msg: string };
+export interface PlaybackInit {
+  type: "playback_init";
+  speed: number;
+  paused: boolean;
+}
+
+export interface SpeedChanged {
+  type: "speed_changed";
+  speed: number;
+}
+
+export interface PausedMsg {
+  type: "paused";
+}
+
+export interface ResumedMsg {
+  type: "resumed";
+}
+
+export type StreamMessage =
+  | TickUpdate
+  | NightUpdate
+  | CompleteUpdate
+  | PlaybackInit
+  | SpeedChanged
+  | PausedMsg
+  | ResumedMsg
+  | { type: "error"; msg: string };
 
 export type TimeScale = "5m" | "10m" | "30m" | "1h" | "4h" | "1d" | "1w" | "30d" | "1y" | "5y" | "all";
 

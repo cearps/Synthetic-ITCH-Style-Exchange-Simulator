@@ -95,7 +95,6 @@ class SimulationCreate(BaseModel):
     seconds: int = 23400
     days: int = 1
     seed: int = 42
-    speed: float = 500.0
     p0: float = 100.0
     preset: str = "simple_high_exec"
     model: Optional[str] = None
@@ -136,13 +135,6 @@ class SimulationCreate(BaseModel):
             raise ValueError("seed must be a positive integer")
         return v
 
-    @field_validator("speed")
-    @classmethod
-    def validate_speed(cls, v: float) -> float:
-        if not (1.0 <= v <= MAX_SPEED):
-            raise ValueError(f"speed must be between 1 and {MAX_SPEED}")
-        return v
-
     @field_validator("p0")
     @classmethod
     def validate_p0(cls, v: float) -> float:
@@ -164,7 +156,6 @@ class SimulationInfo(BaseModel):
     seconds: int
     days: int
     seed: int
-    speed: float
     p0: float
     status: str
     total_events: int = 0
@@ -178,7 +169,7 @@ class DeleteResponse(BaseModel):
 _simulations: Dict[str, dict] = {}
 _active_streams: Dict[str, bool] = {}
 
-SIM_PUBLIC_FIELDS = {"id", "symbol", "seconds", "days", "seed", "speed", "p0", "status", "total_events", "preset"}
+SIM_PUBLIC_FIELDS = {"id", "symbol", "seconds", "days", "seed", "p0", "status", "total_events", "preset"}
 
 
 def _pub(s: dict) -> dict:
@@ -263,7 +254,7 @@ async def create_simulation(cfg: SimulationCreate):
 
     _simulations[sim_id] = {
         "id": sim_id, "symbol": symbol, "seconds": cfg.seconds, "days": cfg.days,
-        "seed": cfg.seed, "speed": cfg.speed, "p0": cfg.p0, "status": "ready",
+        "seed": cfg.seed, "p0": cfg.p0, "status": "ready",
         "total_events": total, "preset": cfg.preset,
         "run_dir": str(out_dir), "header_sample": header_sample,
     }
@@ -297,6 +288,30 @@ async def delete_simulation(sim_id: str):
     return DeleteResponse(deleted=sim_id)
 
 
+class _PlaybackState:
+    """Mutable playback state shared between stream and control listener."""
+
+    def __init__(self, speed: float):
+        self.speed = speed
+        self.paused = False
+        self._resume_event = asyncio.Event()
+        self._resume_event.set()
+
+    def set_speed(self, s: float) -> None:
+        self.speed = max(1.0, min(s, MAX_SPEED))
+
+    def pause(self) -> None:
+        self.paused = True
+        self._resume_event.clear()
+
+    def resume(self) -> None:
+        self.paused = False
+        self._resume_event.set()
+
+    async def wait_if_paused(self) -> None:
+        await self._resume_event.wait()
+
+
 @app.websocket("/api/simulations/{sim_id}/stream")
 async def stream_simulation(websocket: WebSocket, sim_id: str):
     await websocket.accept()
@@ -306,13 +321,43 @@ async def stream_simulation(websocket: WebSocket, sim_id: str):
         await websocket.close(code=4004)
         return
 
+    speed_param = websocket.query_params.get("speed")
+    initial_speed = float(speed_param) if speed_param else 500.0
+    initial_speed = max(1.0, min(initial_speed, MAX_SPEED))
+
+    pb = _PlaybackState(initial_speed)
     _active_streams[sim_id] = True
+
+    async def _listen_controls():
+        try:
+            while True:
+                raw = await websocket.receive_text()
+                try:
+                    ctrl = __import__("json").loads(raw)
+                except (ValueError, TypeError):
+                    continue
+                ctype = ctrl.get("type")
+                if ctype == "set_speed" and isinstance(ctrl.get("speed"), (int, float)):
+                    pb.set_speed(float(ctrl["speed"]))
+                    await websocket.send_json({"type": "speed_changed", "speed": pb.speed})
+                elif ctype == "pause":
+                    pb.pause()
+                    await websocket.send_json({"type": "paused"})
+                elif ctype == "resume":
+                    pb.resume()
+                    await websocket.send_json({"type": "resumed"})
+        except (WebSocketDisconnect, Exception):
+            pass
+
+    control_task = asyncio.create_task(_listen_controls())
+
     run_dir = Path(sim["run_dir"])
     header_sample = sim["header_sample"]
     tick_div = header_sample.get("tick_size", 100) if header_sample else 100
-    speed = sim["speed"]
 
     try:
+        await websocket.send_json({"type": "playback_init", "speed": pb.speed, "paused": False})
+
         manifest = load_manifest(run_dir)
         sec = manifest["securities"][0]
         sessions = sec["sessions"]
@@ -341,14 +386,15 @@ async def stream_simulation(websocket: WebSocket, sim_id: str):
             prices = events["price_ticks"]
             qtys = events["qty"]
 
-            t0_sim = int(ts_arr[0])
-            wall_t0 = time.monotonic()
+            prev_ts_ns = int(ts_arr[0])
             batch = max(1, n // 400)
             recent_events: list = []
 
             for i in range(n):
                 if not _active_streams.get(sim_id, False):
                     break
+
+                await pb.wait_if_paused()
 
                 etype = int(types[i])
                 eprice = int(prices[i])
@@ -364,14 +410,16 @@ async def stream_simulation(websocket: WebSocket, sim_id: str):
                     recent_events = recent_events[-50:]
 
                 if i % batch == 0 or i == n - 1:
-                    sim_elapsed = (int(ts_arr[i]) - t0_sim) / 1e9
-                    target = wall_t0 + sim_elapsed / speed
-                    now = time.monotonic()
-                    if target > now:
-                        await asyncio.sleep(target - now)
+                    cur_ts_ns = int(ts_arr[i])
+                    if i > 0:
+                        sim_gap_s = (cur_ts_ns - prev_ts_ns) / 1e9
+                        wall_gap = sim_gap_s / pb.speed
+                        if wall_gap > 0:
+                            await asyncio.sleep(min(wall_gap, 2.0))
+                    prev_ts_ns = cur_ts_ns
 
                     mid = (book.best_bid + book.best_ask) / 2.0
-                    ts_s = int(ts_arr[i]) / 1e9
+                    ts_s = cur_ts_ns / 1e9
                     global_idx = events_so_far + i
 
                     bids = [{"price": round(book.bids[k].price / tick_div, 4),
@@ -397,6 +445,7 @@ async def stream_simulation(websocket: WebSocket, sim_id: str):
                         "bids": bids,
                         "asks": asks,
                         "events": recent_events[-8:],
+                        "speed": pb.speed,
                     }
                     try:
                         await websocket.send_json(msg)
@@ -429,6 +478,7 @@ async def stream_simulation(websocket: WebSocket, sim_id: str):
     except Exception:
         logger.exception("WebSocket stream error for sim %s", sim_id)
     finally:
+        control_task.cancel()
         _active_streams.pop(sim_id, None)
 
 

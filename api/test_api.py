@@ -53,12 +53,6 @@ async def test_create_rejects_symbol_with_spaces(client):
 
 
 @pytest.mark.anyio
-async def test_create_rejects_zero_speed(client):
-    r = await client.post("/api/simulations", json={"symbol": "AAPL", "speed": 0})
-    assert r.status_code == 422
-
-
-@pytest.mark.anyio
 async def test_create_rejects_negative_days(client):
     r = await client.post("/api/simulations", json={"symbol": "AAPL", "days": -1})
     assert r.status_code == 422
@@ -92,7 +86,6 @@ async def test_create_list_delete_flow(client):
         "seconds": 60,
         "days": 1,
         "seed": 1,
-        "speed": 1000,
         "p0": 100,
     })
     assert r.status_code == 200
@@ -123,12 +116,12 @@ async def test_create_list_delete_flow(client):
 @pytest.mark.skipif(not RUN_BIN.exists(), reason="C++ binary not built")
 async def test_duplicate_symbol_rejected(client):
     r = await client.post("/api/simulations", json={
-        "symbol": "DUP", "seconds": 60, "days": 1, "seed": 1, "speed": 1000, "p0": 100,
+        "symbol": "DUP", "seconds": 60, "days": 1, "seed": 1, "p0": 100,
     })
     assert r.status_code == 200
 
     r = await client.post("/api/simulations", json={
-        "symbol": "DUP", "seconds": 60, "days": 1, "seed": 2, "speed": 1000, "p0": 100,
+        "symbol": "DUP", "seconds": 60, "days": 1, "seed": 2, "p0": 100,
     })
     assert r.status_code == 409
 
@@ -151,10 +144,10 @@ async def test_get_nonexistent_returns_404(client):
 @pytest.mark.skipif(not RUN_BIN.exists(), reason="C++ binary not built")
 async def test_simulation_response_has_no_internal_fields(client):
     r = await client.post("/api/simulations", json={
-        "symbol": "SHAPE", "seconds": 60, "days": 1, "seed": 1, "speed": 1000, "p0": 100,
+        "symbol": "SHAPE", "seconds": 60, "days": 1, "seed": 1, "p0": 100,
     })
     sim = r.json()
     assert "run_dir" not in sim
     assert "header_sample" not in sim
-    expected_keys = {"id", "symbol", "seconds", "days", "seed", "speed", "p0", "status", "total_events", "preset"}
+    expected_keys = {"id", "symbol", "seconds", "days", "seed", "p0", "status", "total_events", "preset"}
     assert set(sim.keys()) == expected_keys
