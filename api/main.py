@@ -1,6 +1,7 @@
 import asyncio
+import logging
+import re
 import shutil
-import subprocess
 import sys
 import time
 import uuid
@@ -9,15 +10,23 @@ from typing import Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "notebooks"))
 from book_replay import _MiniBook
 from qrsdp_reader import load_manifest, read_day, read_header
 
+logger = logging.getLogger("qrsdp_api")
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RUN_BIN = REPO_ROOT / "build" / "qrsdp_run"
 OUTPUT_DIR = REPO_ROOT / "output" / "api_sims"
+
+SYMBOL_RE = re.compile(r"^[A-Z0-9]{1,8}$")
+MAX_DAYS = 252
+MAX_SECONDS = 86400
+MAX_SPEED = 10000.0
+MAX_P0 = 100000.0
 
 EVENT_NAMES = {
     0: "ADD BID", 1: "ADD ASK", 2: "CANCEL BID",
@@ -88,6 +97,56 @@ class SimulationCreate(BaseModel):
     cancel_sens: Optional[float] = None
     spread_sens: Optional[float] = None
 
+    @field_validator("symbol")
+    @classmethod
+    def validate_symbol(cls, v: str) -> str:
+        v = v.strip().upper()
+        if not SYMBOL_RE.match(v):
+            raise ValueError("Symbol must be 1-8 alphanumeric characters")
+        return v
+
+    @field_validator("seconds")
+    @classmethod
+    def validate_seconds(cls, v: int) -> int:
+        if not (60 <= v <= MAX_SECONDS):
+            raise ValueError(f"seconds must be between 60 and {MAX_SECONDS}")
+        return v
+
+    @field_validator("days")
+    @classmethod
+    def validate_days(cls, v: int) -> int:
+        if not (1 <= v <= MAX_DAYS):
+            raise ValueError(f"days must be between 1 and {MAX_DAYS}")
+        return v
+
+    @field_validator("seed")
+    @classmethod
+    def validate_seed(cls, v: int) -> int:
+        if not (1 <= v <= 2**63 - 1):
+            raise ValueError("seed must be a positive integer")
+        return v
+
+    @field_validator("speed")
+    @classmethod
+    def validate_speed(cls, v: float) -> float:
+        if not (1.0 <= v <= MAX_SPEED):
+            raise ValueError(f"speed must be between 1 and {MAX_SPEED}")
+        return v
+
+    @field_validator("p0")
+    @classmethod
+    def validate_p0(cls, v: float) -> float:
+        if not (0.01 <= v <= MAX_P0):
+            raise ValueError(f"p0 must be between 0.01 and {MAX_P0}")
+        return v
+
+    @field_validator("preset")
+    @classmethod
+    def validate_preset(cls, v: str) -> str:
+        if v not in PRESETS:
+            raise ValueError(f"Unknown preset: {v}. Valid: {list(PRESETS.keys())}")
+        return v
+
 
 class SimulationInfo(BaseModel):
     id: str
@@ -102,12 +161,25 @@ class SimulationInfo(BaseModel):
     preset: str = ""
 
 
+class DeleteResponse(BaseModel):
+    deleted: str
+
+
 _simulations: Dict[str, dict] = {}
 _active_streams: Dict[str, bool] = {}
 
+SIM_PUBLIC_FIELDS = {"id", "symbol", "seconds", "days", "seed", "speed", "p0", "status", "total_events", "preset"}
+
 
 def _pub(s: dict) -> dict:
-    return {k: v for k, v in s.items() if k not in ("run_dir", "header_sample")}
+    return {k: v for k, v in s.items() if k in SIM_PUBLIC_FIELDS}
+
+
+@app.on_event("startup")
+async def startup_check():
+    if not RUN_BIN.exists():
+        logger.error("C++ binary not found at %s — build the project first", RUN_BIN)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @app.get("/api/presets")
@@ -117,15 +189,19 @@ async def get_presets():
 
 @app.post("/api/simulations", response_model=SimulationInfo)
 async def create_simulation(cfg: SimulationCreate):
-    symbol = cfg.symbol.strip().upper()
-    if not symbol:
-        raise HTTPException(400, "Symbol is required")
+    symbol = cfg.symbol
     for s in _simulations.values():
         if s["symbol"] == symbol and s["status"] == "ready":
             raise HTTPException(409, f"Symbol '{symbol}' already exists. Delete it first or choose a different name.")
 
-    preset = PRESETS.get(cfg.preset, PRESETS["simple_high_exec"])
+    if not RUN_BIN.exists():
+        raise HTTPException(503, "Simulation engine not available — binary not built")
+
+    preset = PRESETS[cfg.preset]
     model = cfg.model or preset["model"]
+    if model not in ("simple", "hlr"):
+        raise HTTPException(400, "model must be 'simple' or 'hlr'")
+
     base_L = cfg.base_L if cfg.base_L is not None else preset["base_L"]
     base_C = cfg.base_C if cfg.base_C is not None else preset["base_C"]
     base_M = cfg.base_M if cfg.base_M is not None else preset["base_M"]
@@ -136,7 +212,7 @@ async def create_simulation(cfg: SimulationCreate):
 
     p0_ticks = int(cfg.p0 * 100)
 
-    sim_id = uuid.uuid4().hex[:8]
+    sim_id = uuid.uuid4().hex[:12]
     out_dir = OUTPUT_DIR / sim_id
 
     cmd = [
@@ -156,9 +232,19 @@ async def create_simulation(cfg: SimulationCreate):
         "--spread-sens", str(sprd),
     ]
 
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-    if result.returncode != 0:
-        raise HTTPException(500, f"Simulation failed: {result.stderr[:500]}")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=600)
+        if proc.returncode != 0:
+            logger.error("Simulation subprocess failed: %s", stderr_bytes.decode(errors="replace")[:500])
+            raise HTTPException(500, "Simulation engine returned an error")
+    except asyncio.TimeoutError:
+        proc.kill()
+        raise HTTPException(504, "Simulation timed out")
 
     manifest = load_manifest(out_dir)
     total = 0
@@ -194,13 +280,18 @@ async def get_simulation(sim_id: str):
     return SimulationInfo(**_pub(s))
 
 
-@app.delete("/api/simulations/{sim_id}")
+@app.delete("/api/simulations/{sim_id}", response_model=DeleteResponse)
 async def delete_simulation(sim_id: str):
     _active_streams.pop(sim_id, None)
     s = _simulations.pop(sim_id, None)
-    if s and s.get("run_dir"):
-        shutil.rmtree(s["run_dir"], ignore_errors=True)
-    return {"deleted": sim_id}
+    if not s:
+        raise HTTPException(404, "Not found")
+    run_dir = s.get("run_dir")
+    if run_dir:
+        p = Path(run_dir)
+        if p.exists() and OUTPUT_DIR in p.parents:
+            shutil.rmtree(p, ignore_errors=True)
+    return DeleteResponse(deleted=sim_id)
 
 
 @app.websocket("/api/simulations/{sim_id}/stream")
@@ -208,8 +299,8 @@ async def stream_simulation(websocket: WebSocket, sim_id: str):
     await websocket.accept()
     sim = _simulations.get(sim_id)
     if not sim or sim["status"] != "ready":
-        await websocket.send_json({"type": "error", "msg": "not found or not ready"})
-        await websocket.close()
+        await websocket.send_json({"type": "error", "msg": "Simulation not found or not ready"})
+        await websocket.close(code=4004)
         return
 
     _active_streams[sim_id] = True
@@ -263,7 +354,7 @@ async def stream_simulation(websocket: WebSocket, sim_id: str):
 
                 recent_events.append({
                     "type": EVENT_NAMES.get(etype, "?"),
-                    "price": round(eprice / tick_div, 2),
+                    "price": round(eprice / tick_div, 4),
                     "qty": eqty,
                 })
                 if len(recent_events) > 50:
@@ -332,6 +423,8 @@ async def stream_simulation(websocket: WebSocket, sim_id: str):
             await websocket.send_json({"type": "complete", "totalEvents": grand_total, "totalDays": total_days})
     except WebSocketDisconnect:
         pass
+    except Exception:
+        logger.exception("WebSocket stream error for sim %s", sim_id)
     finally:
         _active_streams.pop(sim_id, None)
 
