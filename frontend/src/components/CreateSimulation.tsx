@@ -19,9 +19,12 @@ export default function CreateSimulation({ onCreate }: Props) {
 
   useEffect(() => {
     fetch("/api/presets")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`${r.status}`);
+        return r.json();
+      })
       .then(setPresets)
-      .catch(() => {});
+      .catch(() => setError("Failed to load model presets"));
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import type { Simulation, TickUpdate, NightUpdate, PricePoint, OrderEvent, StreamMessage, Preset } from "./types";
+import type { Simulation, TickUpdate, NightUpdate, PricePoint, OrderEvent, StreamMessage } from "./types";
 import CreateSimulation from "./components/CreateSimulation";
 import SimulationList from "./components/SimulationList";
 import SimulationView from "./components/SimulationView";
@@ -18,8 +18,13 @@ export default function App() {
   const wsRef = useRef<WebSocket | null>(null);
 
   const refreshSims = useCallback(async () => {
-    const res = await fetch(`${API}/simulations`);
-    setSims(await res.json());
+    try {
+      const res = await fetch(`${API}/simulations`);
+      if (!res.ok) return;
+      setSims(await res.json());
+    } catch {
+      // network error on initial load — silently retry on next interaction
+    }
   }, []);
 
   const handleCreate = useCallback(
@@ -30,8 +35,8 @@ export default function App() {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Failed to create simulation");
+        const err = await res.json().catch(() => ({ detail: `Server error (${res.status})` }));
+        throw new Error(err.detail || `Request failed (${res.status})`);
       }
       const sim: Simulation = await res.json();
       setSims((prev) => [...prev, sim]);
@@ -55,8 +60,15 @@ export default function App() {
       const socket = new WebSocket(
         `${proto}//${window.location.host}${API}/simulations/${sim.id}/stream`
       );
+
       socket.onmessage = (e) => {
-        const msg: StreamMessage = JSON.parse(e.data);
+        let msg: StreamMessage;
+        try {
+          msg = JSON.parse(e.data);
+        } catch {
+          return;
+        }
+
         if (msg.type === "tick") {
           setLastTick(msg);
           setNight(null);
@@ -75,7 +87,16 @@ export default function App() {
           setStreaming(false);
         }
       };
-      socket.onclose = () => setStreaming(false);
+
+      socket.onerror = () => {
+        setStreaming(false);
+      };
+
+      socket.onclose = () => {
+        setStreaming(false);
+        wsRef.current = null;
+      };
+
       wsRef.current = socket;
     },
     []
@@ -83,7 +104,12 @@ export default function App() {
 
   const handleDelete = useCallback(
     async (id: string) => {
-      await fetch(`${API}/simulations/${id}`, { method: "DELETE" });
+      try {
+        const res = await fetch(`${API}/simulations/${id}`, { method: "DELETE" });
+        if (!res.ok && res.status !== 404) return;
+      } catch {
+        return;
+      }
       setSims((prev) => prev.filter((s) => s.id !== id));
       if (activeSim?.id === id) {
         setActiveSim(null);
