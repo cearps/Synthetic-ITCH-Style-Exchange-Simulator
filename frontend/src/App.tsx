@@ -46,7 +46,13 @@ export default function App() {
       );
       socket.onmessage = (e) => {
         const data: StreamUpdate = JSON.parse(e.data);
-        setStreamData(data);
+        if (data.type === "complete") {
+          setStreamData((prev) =>
+            prev ? { ...prev, type: "complete", totalEvents: data.totalEvents } : data
+          );
+        } else {
+          setStreamData(data);
+        }
       };
       socket.onclose = () => setWs(null);
       setWs(socket);

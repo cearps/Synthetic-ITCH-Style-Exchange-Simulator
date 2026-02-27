@@ -14,7 +14,11 @@ export default function SimulationView({ sim, data, streaming, onStop }: Props) 
     return <div className="error-msg">Error: {data.msg}</div>;
   }
 
-  const pct = data.total ? Math.round(((data.idx ?? 0) / data.total) * 100) : 0;
+  const pct = data.total
+    ? Math.round(((data.idx ?? 0) / data.total) * 100)
+    : data.type === "complete"
+      ? 100
+      : 0;
   const done = data.type === "complete";
 
   return (
