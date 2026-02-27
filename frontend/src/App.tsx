@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
-import type { Simulation, StreamUpdate } from "./types";
+import { useState, useCallback, useRef } from "react";
+import type { Simulation, TickUpdate, NightUpdate, PricePoint, OrderEvent, StreamMessage, Preset } from "./types";
 import CreateSimulation from "./components/CreateSimulation";
 import SimulationList from "./components/SimulationList";
 import SimulationView from "./components/SimulationView";
@@ -9,8 +9,13 @@ const API = "/api";
 export default function App() {
   const [sims, setSims] = useState<Simulation[]>([]);
   const [activeSim, setActiveSim] = useState<Simulation | null>(null);
-  const [streamData, setStreamData] = useState<StreamUpdate | null>(null);
-  const [ws, setWs] = useState<WebSocket | null>(null);
+  const [lastTick, setLastTick] = useState<TickUpdate | null>(null);
+  const [night, setNight] = useState<NightUpdate | null>(null);
+  const [done, setDone] = useState(false);
+  const [streaming, setStreaming] = useState(false);
+  const [priceHistory, setPriceHistory] = useState<PricePoint[]>([]);
+  const [eventFeed, setEventFeed] = useState<OrderEvent[]>([]);
+  const wsRef = useRef<WebSocket | null>(null);
 
   const refreshSims = useCallback(async () => {
     const res = await fetch(`${API}/simulations`);
@@ -18,12 +23,16 @@ export default function App() {
   }, []);
 
   const handleCreate = useCallback(
-    async (symbol: string, seconds: number, seed: number, speed: number, model: string) => {
+    async (body: Record<string, unknown>) => {
       const res = await fetch(`${API}/simulations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbol, seconds, seed, speed, model }),
+        body: JSON.stringify(body),
       });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Failed to create simulation");
+      }
       const sim: Simulation = await res.json();
       setSims((prev) => [...prev, sim]);
       return sim;
@@ -33,31 +42,43 @@ export default function App() {
 
   const handleView = useCallback(
     (sim: Simulation) => {
-      if (ws) {
-        ws.close();
-        setWs(null);
-      }
+      if (wsRef.current) wsRef.current.close();
       setActiveSim(sim);
-      setStreamData(null);
+      setLastTick(null);
+      setNight(null);
+      setDone(false);
+      setPriceHistory([]);
+      setEventFeed([]);
+      setStreaming(true);
 
       const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
       const socket = new WebSocket(
         `${proto}//${window.location.host}${API}/simulations/${sim.id}/stream`
       );
       socket.onmessage = (e) => {
-        const data: StreamUpdate = JSON.parse(e.data);
-        if (data.type === "complete") {
-          setStreamData((prev) =>
-            prev ? { ...prev, type: "complete", totalEvents: data.totalEvents } : data
-          );
-        } else {
-          setStreamData(data);
+        const msg: StreamMessage = JSON.parse(e.data);
+        if (msg.type === "tick") {
+          setLastTick(msg);
+          setNight(null);
+          const absT = msg.dayOffset + msg.ts;
+          setPriceHistory((prev) => [
+            ...prev,
+            { absT, t: msg.ts, mid: msg.mid, bid: msg.bestBid, ask: msg.bestAsk, day: msg.day },
+          ]);
+          if (msg.events?.length) {
+            setEventFeed((prev) => [...prev.slice(-92), ...msg.events]);
+          }
+        } else if (msg.type === "night") {
+          setNight(msg);
+        } else if (msg.type === "complete") {
+          setDone(true);
+          setStreaming(false);
         }
       };
-      socket.onclose = () => setWs(null);
-      setWs(socket);
+      socket.onclose = () => setStreaming(false);
+      wsRef.current = socket;
     },
-    [ws]
+    []
   );
 
   const handleDelete = useCallback(
@@ -66,19 +87,22 @@ export default function App() {
       setSims((prev) => prev.filter((s) => s.id !== id));
       if (activeSim?.id === id) {
         setActiveSim(null);
-        setStreamData(null);
-        if (ws) ws.close();
+        setLastTick(null);
+        setNight(null);
+        setDone(false);
+        setPriceHistory([]);
+        setEventFeed([]);
+        if (wsRef.current) wsRef.current.close();
       }
     },
-    [activeSim, ws]
+    [activeSim]
   );
 
   const handleStop = useCallback(() => {
-    if (ws) {
-      ws.close();
-      setWs(null);
-    }
-  }, [ws]);
+    if (wsRef.current) wsRef.current.close();
+    wsRef.current = null;
+    setStreaming(false);
+  }, []);
 
   return (
     <div className="app">
@@ -86,7 +110,6 @@ export default function App() {
         <h1>QRSDP Exchange Simulator</h1>
         <p className="subtitle">Real-time synthetic market data engine</p>
       </header>
-
       <div className="app-layout">
         <aside className="sidebar">
           <CreateSimulation onCreate={handleCreate} />
@@ -98,15 +121,20 @@ export default function App() {
             onRefresh={refreshSims}
           />
         </aside>
-
         <main className="main-panel">
-          {activeSim && streamData ? (
+          {activeSim && (lastTick || night || done) ? (
             <SimulationView
               sim={activeSim}
-              data={streamData}
-              streaming={ws !== null}
+              tick={lastTick}
+              night={night}
+              done={done}
+              streaming={streaming}
+              priceHistory={priceHistory}
+              eventFeed={eventFeed}
               onStop={handleStop}
             />
+          ) : activeSim && streaming ? (
+            <div className="placeholder">Connecting to stream...</div>
           ) : (
             <div className="placeholder">
               <p>Create a simulation and click Stream to view real-time data</p>

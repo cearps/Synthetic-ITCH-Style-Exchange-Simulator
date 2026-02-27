@@ -9,10 +9,14 @@ interface Props {
   onRefresh: () => void;
 }
 
+function fmtEvents(n: number) {
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(0)}K`;
+  return String(n);
+}
+
 export default function SimulationList({ sims, activeSim, onView, onDelete, onRefresh }: Props) {
-  useEffect(() => {
-    onRefresh();
-  }, [onRefresh]);
+  useEffect(() => { onRefresh(); }, [onRefresh]);
 
   return (
     <div className="sim-list">
@@ -25,19 +29,13 @@ export default function SimulationList({ sims, activeSim, onView, onDelete, onRe
             <span className={`sim-status ${s.status}`}>{s.status}</span>
           </div>
           <div className="sim-card-meta">
-            {s.total_events.toLocaleString()} events &middot; {s.seconds}s &middot; seed {s.seed}
+            {fmtEvents(s.total_events)} events · {s.days}d · ${s.p0} · seed {s.seed}
           </div>
           <div className="sim-card-actions">
-            <button
-              className="btn-stream"
-              onClick={() => onView(s)}
-              disabled={s.status !== "ready"}
-            >
+            <button className="btn-stream" onClick={() => onView(s)} disabled={s.status !== "ready"}>
               Stream
             </button>
-            <button className="btn-delete" onClick={() => onDelete(s.id)}>
-              Delete
-            </button>
+            <button className="btn-delete" onClick={() => onDelete(s.id)}>Delete</button>
           </div>
         </div>
       ))}

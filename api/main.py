@@ -7,17 +7,60 @@ import uuid
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "notebooks"))
 from book_replay import _MiniBook
-from qrsdp_reader import read_day, read_header
+from qrsdp_reader import load_manifest, read_day, read_header
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RUN_BIN = REPO_ROOT / "build" / "qrsdp_run"
 OUTPUT_DIR = REPO_ROOT / "output" / "api_sims"
+
+EVENT_NAMES = {
+    0: "ADD BID", 1: "ADD ASK", 2: "CANCEL BID",
+    3: "CANCEL ASK", 4: "EXEC BUY", 5: "EXEC SELL",
+}
+
+PRESETS = {
+    "simple_high_exec": {
+        "label": "Simple — High Execution",
+        "model": "simple",
+        "base_L": 20.0, "base_C": 0.5, "base_M": 40.0,
+        "imbalance_sens": 1.0, "cancel_sens": 1.0,
+        "epsilon_exec": 1.0, "spread_sens": 0.4,
+    },
+    "simple_default": {
+        "label": "Simple — Default",
+        "model": "simple",
+        "base_L": 20.0, "base_C": 0.5, "base_M": 15.0,
+        "imbalance_sens": 1.0, "cancel_sens": 1.0,
+        "epsilon_exec": 0.5, "spread_sens": 0.4,
+    },
+    "simple_high_cancel": {
+        "label": "Simple — High Cancel",
+        "model": "simple",
+        "base_L": 20.0, "base_C": 1.5, "base_M": 15.0,
+        "imbalance_sens": 1.0, "cancel_sens": 2.0,
+        "epsilon_exec": 0.5, "spread_sens": 0.4,
+    },
+    "simple_no_spread_fb": {
+        "label": "Simple — No Spread Feedback",
+        "model": "simple",
+        "base_L": 20.0, "base_C": 0.5, "base_M": 15.0,
+        "imbalance_sens": 1.0, "cancel_sens": 1.0,
+        "epsilon_exec": 0.5, "spread_sens": 0.0,
+    },
+    "hlr_default": {
+        "label": "HLR 2014 — Queue-Reactive",
+        "model": "hlr",
+        "base_L": 20.0, "base_C": 0.5, "base_M": 15.0,
+        "imbalance_sens": 1.0, "cancel_sens": 1.0,
+        "epsilon_exec": 0.5, "spread_sens": 0.4,
+    },
+}
 
 app = FastAPI(title="QRSDP Simulation API")
 app.add_middleware(
@@ -31,109 +74,132 @@ app.add_middleware(
 class SimulationCreate(BaseModel):
     symbol: str
     seconds: int = 23400
+    days: int = 1
     seed: int = 42
     speed: float = 500.0
-    model: str = "simple"
-    base_M: float = 40.0
-    epsilon_exec: float = 1.0
-    base_L: float = 20.0
-    base_C: float = 0.5
-    imbalance_sens: float = 1.0
-    cancel_sens: float = 1.0
-    spread_sens: float = 0.4
+    p0: float = 100.0
+    preset: str = "simple_high_exec"
+    model: Optional[str] = None
+    base_M: Optional[float] = None
+    epsilon_exec: Optional[float] = None
+    base_L: Optional[float] = None
+    base_C: Optional[float] = None
+    imbalance_sens: Optional[float] = None
+    cancel_sens: Optional[float] = None
+    spread_sens: Optional[float] = None
 
 
 class SimulationInfo(BaseModel):
     id: str
     symbol: str
     seconds: int
+    days: int
     seed: int
     speed: float
+    p0: float
     status: str
     total_events: int = 0
-    model: str = "simple"
+    preset: str = ""
 
 
 _simulations: Dict[str, dict] = {}
 _active_streams: Dict[str, bool] = {}
 
 
-def _public_info(s: dict) -> dict:
-    return {k: v for k, v in s.items() if k not in ("file", "header")}
+def _pub(s: dict) -> dict:
+    return {k: v for k, v in s.items() if k not in ("run_dir", "header_sample")}
+
+
+@app.get("/api/presets")
+async def get_presets():
+    return PRESETS
 
 
 @app.post("/api/simulations", response_model=SimulationInfo)
 async def create_simulation(cfg: SimulationCreate):
+    symbol = cfg.symbol.strip().upper()
+    if not symbol:
+        raise HTTPException(400, "Symbol is required")
+    for s in _simulations.values():
+        if s["symbol"] == symbol and s["status"] == "ready":
+            raise HTTPException(409, f"Symbol '{symbol}' already exists. Delete it first or choose a different name.")
+
+    preset = PRESETS.get(cfg.preset, PRESETS["simple_high_exec"])
+    model = cfg.model or preset["model"]
+    base_L = cfg.base_L if cfg.base_L is not None else preset["base_L"]
+    base_C = cfg.base_C if cfg.base_C is not None else preset["base_C"]
+    base_M = cfg.base_M if cfg.base_M is not None else preset["base_M"]
+    imb = cfg.imbalance_sens if cfg.imbalance_sens is not None else preset["imbalance_sens"]
+    canc = cfg.cancel_sens if cfg.cancel_sens is not None else preset["cancel_sens"]
+    eps = cfg.epsilon_exec if cfg.epsilon_exec is not None else preset["epsilon_exec"]
+    sprd = cfg.spread_sens if cfg.spread_sens is not None else preset["spread_sens"]
+
+    p0_ticks = int(cfg.p0 * 100)
+
     sim_id = uuid.uuid4().hex[:8]
     out_dir = OUTPUT_DIR / sim_id
-    out_dir.mkdir(parents=True, exist_ok=True)
 
     cmd = [
         str(RUN_BIN),
         "--seed", str(cfg.seed),
-        "--days", "1",
+        "--days", str(cfg.days),
         "--seconds", str(cfg.seconds),
         "--output", str(out_dir),
-        "--securities", f"{cfg.symbol}:{10000}",
-        "--model", cfg.model,
-        "--base-L", str(cfg.base_L),
-        "--base-C", str(cfg.base_C),
-        "--base-M", str(cfg.base_M),
-        "--imbalance-sens", str(cfg.imbalance_sens),
-        "--cancel-sens", str(cfg.cancel_sens),
-        "--epsilon-exec", str(cfg.epsilon_exec),
-        "--spread-sens", str(cfg.spread_sens),
+        "--securities", f"{symbol}:{p0_ticks}",
+        "--model", model,
+        "--base-L", str(base_L),
+        "--base-C", str(base_C),
+        "--base-M", str(base_M),
+        "--imbalance-sens", str(imb),
+        "--cancel-sens", str(canc),
+        "--epsilon-exec", str(eps),
+        "--spread-sens", str(sprd),
     ]
 
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     if result.returncode != 0:
-        _simulations[sim_id] = {
-            "id": sim_id, "symbol": cfg.symbol, "seconds": cfg.seconds,
-            "seed": cfg.seed, "speed": cfg.speed, "status": "error",
-            "total_events": 0, "file": None, "model": cfg.model,
-        }
-        return SimulationInfo(**_public_info(_simulations[sim_id]))
+        raise HTTPException(500, f"Simulation failed: {result.stderr[:500]}")
 
-    qrsdp_file = out_dir / cfg.symbol / "2026-01-02.qrsdp"
-    if not qrsdp_file.exists():
-        for f in out_dir.rglob("*.qrsdp"):
-            qrsdp_file = f
-            break
-
-    header = read_header(str(qrsdp_file))
-    events = read_day(str(qrsdp_file))
+    manifest = load_manifest(out_dir)
+    total = 0
+    header_sample = None
+    for sec in manifest.get("securities", []):
+        for sess in sec["sessions"]:
+            fpath = out_dir / sess["file"]
+            if fpath.exists():
+                evts = read_day(str(fpath))
+                total += len(evts)
+                if header_sample is None:
+                    header_sample = read_header(str(fpath))
 
     _simulations[sim_id] = {
-        "id": sim_id, "symbol": cfg.symbol, "seconds": cfg.seconds,
-        "seed": cfg.seed, "speed": cfg.speed, "status": "ready",
-        "total_events": len(events), "file": str(qrsdp_file),
-        "header": header, "model": cfg.model,
+        "id": sim_id, "symbol": symbol, "seconds": cfg.seconds, "days": cfg.days,
+        "seed": cfg.seed, "speed": cfg.speed, "p0": cfg.p0, "status": "ready",
+        "total_events": total, "preset": cfg.preset,
+        "run_dir": str(out_dir), "header_sample": header_sample,
     }
-    return SimulationInfo(**_public_info(_simulations[sim_id]))
+    return SimulationInfo(**_pub(_simulations[sim_id]))
 
 
 @app.get("/api/simulations", response_model=List[SimulationInfo])
 async def list_simulations():
-    return [SimulationInfo(**_public_info(s)) for s in _simulations.values()]
+    return [SimulationInfo(**_pub(s)) for s in _simulations.values()]
 
 
 @app.get("/api/simulations/{sim_id}", response_model=SimulationInfo)
 async def get_simulation(sim_id: str):
     s = _simulations.get(sim_id)
     if not s:
-        return SimulationInfo(id=sim_id, symbol="", seconds=0, seed=0, speed=0, status="not_found")
-    return SimulationInfo(**_public_info(s))
+        raise HTTPException(404, "Not found")
+    return SimulationInfo(**_pub(s))
 
 
 @app.delete("/api/simulations/{sim_id}")
 async def delete_simulation(sim_id: str):
     _active_streams.pop(sim_id, None)
     s = _simulations.pop(sim_id, None)
-    if s and s.get("file"):
-        sim_root = OUTPUT_DIR / sim_id.split("/")[0]
-        if sim_root.exists():
-            shutil.rmtree(sim_root, ignore_errors=True)
+    if s and s.get("run_dir"):
+        shutil.rmtree(s["run_dir"], ignore_errors=True)
     return {"deleted": sim_id}
 
 
@@ -142,86 +208,128 @@ async def stream_simulation(websocket: WebSocket, sim_id: str):
     await websocket.accept()
     sim = _simulations.get(sim_id)
     if not sim or sim["status"] != "ready":
-        await websocket.send_json({"type": "error", "msg": "simulation not found or not ready"})
+        await websocket.send_json({"type": "error", "msg": "not found or not ready"})
         await websocket.close()
         return
 
     _active_streams[sim_id] = True
+    run_dir = Path(sim["run_dir"])
+    header_sample = sim["header_sample"]
+    tick_div = header_sample.get("tick_size", 100) if header_sample else 100
+    speed = sim["speed"]
 
     try:
-        header = sim["header"]
-        events = read_day(sim["file"])
-        n = len(events)
+        manifest = load_manifest(run_dir)
+        sec = manifest["securities"][0]
+        sessions = sec["sessions"]
+        total_days = len(sessions)
+        grand_total = sim["total_events"]
+        events_so_far = 0
 
-        tick_divisor = header.get("tick_size", 100)
-
-        book = _MiniBook(
-            p0_ticks=header["p0_ticks"],
-            levels_per_side=header["levels_per_side"],
-            initial_spread_ticks=header["initial_spread_ticks"],
-            initial_depth=header["initial_depth"],
-        )
-
-        speed = sim["speed"]
-        ts_arr = events["ts_ns"]
-        types = events["type"]
-        prices = events["price_ticks"]
-        qtys = events["qty"]
-
-        t0_sim = int(ts_arr[0])
-        wall_t0 = time.monotonic()
-        batch_size = max(1, n // 500)
-
-        price_history: list = []
-
-        for i in range(n):
+        for day_idx, sess in enumerate(sessions):
             if not _active_streams.get(sim_id, False):
                 break
 
-            book.apply(int(types[i]), int(prices[i]), int(qtys[i]))
+            fpath = run_dir / sess["file"]
+            hdr = read_header(str(fpath))
+            events = read_day(str(fpath))
+            n = len(events)
 
-            if i % batch_size == 0 or i == n - 1:
-                sim_elapsed_s = (int(ts_arr[i]) - t0_sim) / 1e9
-                target_wall = wall_t0 + sim_elapsed_s / speed
-                now = time.monotonic()
-                if target_wall > now:
-                    await asyncio.sleep(target_wall - now)
+            book = _MiniBook(
+                p0_ticks=hdr["p0_ticks"],
+                levels_per_side=hdr["levels_per_side"],
+                initial_spread_ticks=hdr["initial_spread_ticks"],
+                initial_depth=hdr["initial_depth"],
+            )
 
-                mid = (book.best_bid + book.best_ask) / 2.0
-                ts_s = int(ts_arr[i]) / 1e9
-                price_history.append({
-                    "t": round(ts_s, 3),
-                    "mid": round(mid / tick_divisor, 4),
-                    "bid": round(book.best_bid / tick_divisor, 4),
-                    "ask": round(book.best_ask / tick_divisor, 4),
-                })
+            ts_arr = events["ts_ns"]
+            types = events["type"]
+            prices = events["price_ticks"]
+            qtys = events["qty"]
 
-                bids = [{"price": round(book.bids[k].price / tick_divisor, 4),
-                         "depth": book.bids[k].depth}
-                        for k in range(book.num_levels)]
-                asks = [{"price": round(book.asks[k].price / tick_divisor, 4),
-                         "depth": book.asks[k].depth}
-                        for k in range(book.num_levels)]
+            t0_sim = int(ts_arr[0])
+            wall_t0 = time.monotonic()
+            batch = max(1, n // 400)
+            recent_events: list = []
 
-                msg = {
-                    "type": "update",
-                    "idx": i,
-                    "total": n,
-                    "ts": round(ts_s, 3),
-                    "mid": round(mid / tick_divisor, 4),
-                    "bestBid": round(book.best_bid / tick_divisor, 4),
-                    "bestAsk": round(book.best_ask / tick_divisor, 4),
-                    "spread": round((book.best_ask - book.best_bid) / tick_divisor, 4),
-                    "bids": bids,
-                    "asks": asks,
-                    "priceHistory": price_history[-200:],
-                }
-                try:
-                    await websocket.send_json(msg)
-                except Exception:
+            for i in range(n):
+                if not _active_streams.get(sim_id, False):
                     break
 
-        await websocket.send_json({"type": "complete", "totalEvents": n})
+                etype = int(types[i])
+                eprice = int(prices[i])
+                eqty = int(qtys[i])
+                book.apply(etype, eprice, eqty)
+
+                recent_events.append({
+                    "type": EVENT_NAMES.get(etype, "?"),
+                    "price": round(eprice / tick_div, 2),
+                    "qty": eqty,
+                })
+                if len(recent_events) > 50:
+                    recent_events = recent_events[-50:]
+
+                if i % batch == 0 or i == n - 1:
+                    sim_elapsed = (int(ts_arr[i]) - t0_sim) / 1e9
+                    target = wall_t0 + sim_elapsed / speed
+                    now = time.monotonic()
+                    if target > now:
+                        await asyncio.sleep(target - now)
+
+                    mid = (book.best_bid + book.best_ask) / 2.0
+                    ts_s = int(ts_arr[i]) / 1e9
+                    global_idx = events_so_far + i
+
+                    bids = [{"price": round(book.bids[k].price / tick_div, 4),
+                             "depth": book.bids[k].depth}
+                            for k in range(book.num_levels)]
+                    asks = [{"price": round(book.asks[k].price / tick_div, 4),
+                             "depth": book.asks[k].depth}
+                            for k in range(book.num_levels)]
+
+                    msg = {
+                        "type": "tick",
+                        "idx": global_idx,
+                        "total": grand_total,
+                        "day": day_idx + 1,
+                        "totalDays": total_days,
+                        "date": sess["date"],
+                        "ts": round(ts_s, 3),
+                        "dayOffset": day_idx * 86400,
+                        "mid": round(mid / tick_div, 4),
+                        "bestBid": round(book.best_bid / tick_div, 4),
+                        "bestAsk": round(book.best_ask / tick_div, 4),
+                        "spread": round((book.best_ask - book.best_bid) / tick_div, 4),
+                        "bids": bids,
+                        "asks": asks,
+                        "events": recent_events[-8:],
+                    }
+                    try:
+                        await websocket.send_json(msg)
+                    except Exception:
+                        return
+                    recent_events.clear()
+
+            events_so_far += n
+
+            if day_idx < total_days - 1 and _active_streams.get(sim_id, False):
+                next_date = sessions[day_idx + 1]["date"]
+                close_price = round(book.best_bid / tick_div, 4)
+                try:
+                    await websocket.send_json({
+                        "type": "night",
+                        "day": day_idx + 1,
+                        "totalDays": total_days,
+                        "date": sess["date"],
+                        "nextDate": next_date,
+                        "close": close_price,
+                    })
+                except Exception:
+                    return
+                await asyncio.sleep(2.5)
+
+        if _active_streams.get(sim_id, False):
+            await websocket.send_json({"type": "complete", "totalEvents": grand_total, "totalDays": total_days})
     except WebSocketDisconnect:
         pass
     finally:
