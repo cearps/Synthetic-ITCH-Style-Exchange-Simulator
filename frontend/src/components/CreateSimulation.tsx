@@ -1,21 +1,22 @@
 import { useState } from "react";
 
 interface Props {
-  onCreate: (symbol: string, seconds: number, seed: number, speed: number) => Promise<any>;
+  onCreate: (symbol: string, seconds: number, seed: number, speed: number, model: string) => Promise<any>;
 }
 
 export default function CreateSimulation({ onCreate }: Props) {
   const [symbol, setSymbol] = useState("AAPL");
-  const [seconds, setSeconds] = useState(3600);
+  const [seconds, setSeconds] = useState(23400);
   const [seed, setSeed] = useState(42);
-  const [speed, setSpeed] = useState(200);
+  const [speed, setSpeed] = useState(500);
+  const [model, setModel] = useState("simple");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await onCreate(symbol.toUpperCase(), seconds, seed, speed);
+      await onCreate(symbol.toUpperCase(), seconds, seed, speed, model);
       setSeed((s) => s + 1);
     } finally {
       setLoading(false);
@@ -36,14 +37,19 @@ export default function CreateSimulation({ onCreate }: Props) {
         />
       </label>
       <label>
-        Duration (seconds)
-        <input
-          type="number"
-          value={seconds}
-          onChange={(e) => setSeconds(Number(e.target.value))}
-          min={10}
-          max={86400}
-        />
+        Duration
+        <select value={seconds} onChange={(e) => setSeconds(Number(e.target.value))}>
+          <option value={3600}>1 hour (3,600s)</option>
+          <option value={7200}>2 hours (7,200s)</option>
+          <option value={23400}>Full day (23,400s)</option>
+        </select>
+      </label>
+      <label>
+        Intensity Model
+        <select value={model} onChange={(e) => setModel(e.target.value)}>
+          <option value="simple">Simple (high exec)</option>
+          <option value="hlr">HLR 2014 (queue-reactive)</option>
+        </select>
       </label>
       <label>
         RNG Seed
@@ -57,12 +63,11 @@ export default function CreateSimulation({ onCreate }: Props) {
       <label>
         Replay Speed
         <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
-          <option value={10}>10x</option>
-          <option value={50}>50x</option>
+          <option value={50}>50x (slow)</option>
           <option value={100}>100x</option>
           <option value={200}>200x</option>
           <option value={500}>500x</option>
-          <option value={1000}>1000x</option>
+          <option value={1000}>1000x (fast)</option>
         </select>
       </label>
       <button type="submit" disabled={loading || !symbol.trim()}>

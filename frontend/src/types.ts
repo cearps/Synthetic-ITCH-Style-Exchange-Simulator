@@ -6,6 +6,7 @@ export interface Simulation {
   speed: number;
   status: string;
   total_events: number;
+  model: string;
 }
 
 export interface Level {

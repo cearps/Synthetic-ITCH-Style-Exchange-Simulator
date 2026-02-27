@@ -18,11 +18,11 @@ export default function App() {
   }, []);
 
   const handleCreate = useCallback(
-    async (symbol: string, seconds: number, seed: number, speed: number) => {
+    async (symbol: string, seconds: number, seed: number, speed: number, model: string) => {
       const res = await fetch(`${API}/simulations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbol, seconds, seed, speed }),
+        body: JSON.stringify({ symbol, seconds, seed, speed, model }),
       });
       const sim: Simulation = await res.json();
       setSims((prev) => [...prev, sim]);
