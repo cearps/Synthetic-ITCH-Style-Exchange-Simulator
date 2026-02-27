@@ -8,6 +8,8 @@ import uuid
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
@@ -71,7 +73,15 @@ PRESETS = {
     },
 }
 
-app = FastAPI(title="QRSDP Simulation API")
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    if not RUN_BIN.exists():
+        logger.error("C++ binary not found at %s — build the project first", RUN_BIN)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    yield
+
+
+app = FastAPI(title="QRSDP Simulation API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -173,13 +183,6 @@ SIM_PUBLIC_FIELDS = {"id", "symbol", "seconds", "days", "seed", "speed", "p0", "
 
 def _pub(s: dict) -> dict:
     return {k: v for k, v in s.items() if k in SIM_PUBLIC_FIELDS}
-
-
-@app.on_event("startup")
-async def startup_check():
-    if not RUN_BIN.exists():
-        logger.error("C++ binary not found at %s — build the project first", RUN_BIN)
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @app.get("/api/presets")
