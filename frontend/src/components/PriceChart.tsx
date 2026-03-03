@@ -45,7 +45,10 @@ function formatAbsTime(absT: number, multiDay: boolean): string {
 
 const MAX_CHART_POINTS = 300;
 
-function downsample(data: { time: string; mid: number; bid: number; ask: number }[], maxPts: number) {
+function downsample(
+  data: { time: string; mid: number; bid: number; ask: number }[],
+  maxPts: number,
+) {
   if (data.length <= maxPts) return data;
   const step = Math.ceil(data.length / maxPts);
   const result: typeof data = [];
@@ -69,9 +72,10 @@ export default function PriceChart({ history }: Props) {
   const filtered = useMemo(() => {
     if (!history.length) return [];
     const scaleInfo = TIME_SCALES.find((s) => s.key === scale);
-    const cutoff = scaleInfo && scaleInfo.seconds < Infinity
-      ? history[history.length - 1].absT - scaleInfo.seconds
-      : -Infinity;
+    const cutoff =
+      scaleInfo && scaleInfo.seconds < Infinity
+        ? history[history.length - 1].absT - scaleInfo.seconds
+        : -Infinity;
     return history.filter((p) => p.absT >= cutoff);
   }, [history, scale]);
 
@@ -108,10 +112,13 @@ export default function PriceChart({ history }: Props) {
         <ScaleSelector scale={scale} setScale={setScale} />
       </div>
       <ResponsiveContainer width="100%" height={300}>
-        <AreaChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: 8 }}>
+        <AreaChart
+          data={data}
+          margin={{ top: 8, right: 16, bottom: 4, left: 8 }}
+        >
           <defs>
             <linearGradient id="bidGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={COLORS.bid} stopOpacity={0.20} />
+              <stop offset="0%" stopColor={COLORS.bid} stopOpacity={0.2} />
               <stop offset="100%" stopColor={COLORS.bid} stopOpacity={0} />
             </linearGradient>
             <linearGradient id="askGrad" x1="0" y1="1" x2="0" y2="0">
@@ -146,7 +153,10 @@ export default function PriceChart({ history }: Props) {
             }}
             labelStyle={{ color: COLORS.tooltipLabel, marginBottom: 4 }}
             itemStyle={{ padding: "1px 0" }}
-            formatter={(value: number, name: string) => [`$${value.toFixed(4)}`, name]}
+            formatter={(value: number, name: string) => [
+              `$${value.toFixed(4)}`,
+              name,
+            ]}
           />
           <Area
             type="monotone"
@@ -180,7 +190,13 @@ export default function PriceChart({ history }: Props) {
   );
 }
 
-function ScaleSelector({ scale, setScale }: { scale: TimeScale; setScale: (s: TimeScale) => void }) {
+function ScaleSelector({
+  scale,
+  setScale,
+}: {
+  scale: TimeScale;
+  setScale: (s: TimeScale) => void;
+}) {
   return (
     <div className="scale-selector">
       {TIME_SCALES.map((s) => (

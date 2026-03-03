@@ -13,36 +13,36 @@
   --surface-0: #0c1117;
   --surface-1: #111921;
   --surface-2: #19222d;
-  --surface-teal: rgba(49, 80, 80, 0.10);
-  --surface-glass: rgba(12, 17, 23, 0.80);
+  --surface-teal: rgba(49, 80, 80, 0.1);
+  --surface-glass: rgba(12, 17, 23, 0.8);
 
   /* Borders */
   --border: rgba(255, 255, 255, 0.06);
   --border-subtle: rgba(255, 255, 255, 0.04);
-  --border-hover: rgba(255, 255, 255, 0.10);
-  --border-focus: #0B4AD5;
+  --border-hover: rgba(255, 255, 255, 0.1);
+  --border-focus: #0b4ad5;
 
   /* Text */
-  --text-primary: #D5D5DA;
+  --text-primary: #d5d5da;
   --text-secondary: #8b919a;
   --text-muted: #555c66;
   --text-heading: #eaebee;
 
   /* Primary accent (blue) */
-  --primary: #0B4AD5;
+  --primary: #0b4ad5;
   --primary-hover: #0d56e8;
   --primary-muted: rgba(11, 74, 213, 0.15);
   --primary-glow: rgba(11, 74, 213, 0.25);
 
   /* Secondary accent (teal-blue) */
-  --accent: #03579F;
+  --accent: #03579f;
   --accent-muted: rgba(3, 87, 159, 0.15);
 
   /* Semantic: success (green) */
-  --success: #5E985D;
+  --success: #5e985d;
   --success-bright: #72b871;
   --success-muted: rgba(94, 152, 93, 0.15);
-  --success-glow: rgba(94, 152, 93, 0.20);
+  --success-glow: rgba(94, 152, 93, 0.2);
 
   /* Semantic: error (red) */
   --error: #c53030;
@@ -64,7 +64,8 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--border);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--border);
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--border);
-  --shadow-glow-primary: 0 0 20px var(--primary-glow), 0 0 0 1px rgba(11, 74, 213, 0.3);
+  --shadow-glow-primary:
+    0 0 20px var(--primary-glow), 0 0 0 1px rgba(11, 74, 213, 0.3);
   --shadow-glow-success: 0 0 16px var(--success-glow);
 
   /* Transitions */
@@ -73,10 +74,12 @@
   --transition-slow: 300ms ease;
 
   /* Typography */
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  --font-sans:
+    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    "JetBrains Mono", "SF Mono", "Fira Code", "Cascadia Code", monospace;
 }
-
 
 /* --- Reset & Base ------------------------------------------------- */
 *,
@@ -124,7 +127,6 @@ body {
   background: rgba(255, 255, 255, 0.12);
 }
 
-
 /* --- App Shell ---------------------------------------------------- */
 .app {
   min-height: 100vh;
@@ -145,13 +147,18 @@ body {
 }
 
 .app-header::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: -1px;
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, var(--primary-glow), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--primary-glow),
+    transparent
+  );
   opacity: 0.5;
 }
 
@@ -159,7 +166,12 @@ body {
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.01em;
-  background: linear-gradient(135deg, #4a8eff 0%, var(--primary) 50%, #03579F 100%);
+  background: linear-gradient(
+    135deg,
+    #4a8eff 0%,
+    var(--primary) 50%,
+    #03579f 100%
+  );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -196,7 +208,6 @@ body {
   background: var(--bg-0);
 }
 
-
 /* --- Section Headers ---------------------------------------------- */
 .create-form h3,
 .sim-list h3,
@@ -209,7 +220,6 @@ body {
   color: var(--text-muted);
   margin-bottom: 0;
 }
-
 
 /* --- Create Simulation Form --------------------------------------- */
 .create-form {
@@ -238,7 +248,9 @@ body {
   font-size: 13px;
   font-family: var(--font-sans);
   outline: none;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
 .create-form input::placeholder {
@@ -273,10 +285,14 @@ body {
 }
 
 .create-form button::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    transparent 50%
+  );
   opacity: 0;
   transition: opacity var(--transition-fast);
 }
@@ -299,7 +315,6 @@ body {
   cursor: not-allowed;
   filter: saturate(0.5);
 }
-
 
 /* --- Simulation List ---------------------------------------------- */
 .sim-list {
@@ -330,7 +345,11 @@ body {
 .sim-card.active {
   border-color: rgba(11, 74, 213, 0.4);
   box-shadow: var(--shadow-glow-primary);
-  background: linear-gradient(135deg, var(--surface-1) 0%, rgba(11, 74, 213, 0.05) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--surface-1) 0%,
+    rgba(11, 74, 213, 0.05) 100%
+  );
 }
 
 .sim-card-header {
@@ -428,7 +447,6 @@ body {
   background: var(--error-bright);
 }
 
-
 /* --- Placeholder -------------------------------------------------- */
 .placeholder {
   height: 100%;
@@ -443,7 +461,6 @@ body {
   color: var(--error-bright);
   padding: 24px;
 }
-
 
 /* --- Simulation View ---------------------------------------------- */
 .sim-view {
@@ -509,10 +526,18 @@ body {
   letter-spacing: -0.01em;
 }
 
-.bid-stat .stat-value { color: var(--success-bright); }
-.ask-stat .stat-value { color: var(--error-bright); }
-.mid-stat .stat-value { color: #4a8eff; }
-.spread-stat .stat-value { color: var(--text-secondary); }
+.bid-stat .stat-value {
+  color: var(--success-bright);
+}
+.ask-stat .stat-value {
+  color: var(--error-bright);
+}
+.mid-stat .stat-value {
+  color: #4a8eff;
+}
+.spread-stat .stat-value {
+  color: var(--text-secondary);
+}
 
 .sim-view-controls {
   display: flex;
@@ -545,16 +570,15 @@ body {
 }
 
 .progress-fill::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   right: 0;
   width: 40px;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2));
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2));
   border-radius: var(--radius-full);
 }
-
 
 /* --- Chart Panels ------------------------------------------------- */
 .charts-row {
@@ -591,7 +615,6 @@ body {
   color: var(--text-muted);
   font-size: 13px;
 }
-
 
 /* --- Chart Header + Scale Selector -------------------------------- */
 .chart-header {
@@ -637,7 +660,6 @@ body {
   color: #fff;
   box-shadow: 0 0 8px var(--primary-glow);
 }
-
 
 /* --- Order Book --------------------------------------------------- */
 .orderbook {
@@ -685,8 +707,12 @@ body {
   font-size: 12px;
 }
 
-.ask-price { color: var(--error-bright); }
-.bid-price { color: var(--success-bright); }
+.ask-price {
+  color: var(--error-bright);
+}
+.bid-price {
+  color: var(--success-bright);
+}
 
 .ob-depth {
   text-align: right;
@@ -708,11 +734,19 @@ body {
 }
 
 .ask-bar {
-  background: linear-gradient(90deg, rgba(197, 48, 48, 0.20), rgba(197, 48, 48, 0.08));
+  background: linear-gradient(
+    90deg,
+    rgba(197, 48, 48, 0.2),
+    rgba(197, 48, 48, 0.08)
+  );
 }
 
 .bid-bar {
-  background: linear-gradient(90deg, rgba(94, 152, 93, 0.25), rgba(94, 152, 93, 0.08));
+  background: linear-gradient(
+    90deg,
+    rgba(94, 152, 93, 0.25),
+    rgba(94, 152, 93, 0.08)
+  );
 }
 
 .ob-spread-row {
@@ -731,7 +765,6 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.12em;
 }
-
 
 /* --- Form Extras -------------------------------------------------- */
 .form-row {
@@ -760,7 +793,6 @@ body {
   padding: 6px 0;
 }
 
-
 /* --- Night Overlay ------------------------------------------------ */
 .night-overlay {
   position: relative;
@@ -773,10 +805,14 @@ body {
 }
 
 .night-overlay::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at 50% 0%, rgba(11, 74, 213, 0.08) 0%, transparent 70%);
+  background: radial-gradient(
+    ellipse at 50% 0%,
+    rgba(11, 74, 213, 0.08) 0%,
+    transparent 70%
+  );
   pointer-events: none;
 }
 
@@ -794,8 +830,13 @@ body {
 }
 
 @keyframes twinkle {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .night-title {
@@ -829,9 +870,10 @@ body {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
-
 
 /* --- Event Feed --------------------------------------------------- */
 .feed-panel {
@@ -870,13 +912,13 @@ body {
 .ev-add-bid {
   background: var(--success-muted);
   color: var(--success-bright);
-  border-color: rgba(94, 152, 93, 0.10);
+  border-color: rgba(94, 152, 93, 0.1);
 }
 
 .ev-add-ask {
   background: var(--error-muted);
   color: var(--error-bright);
-  border-color: rgba(197, 48, 48, 0.10);
+  border-color: rgba(197, 48, 48, 0.1);
 }
 
 .ev-cancel {
@@ -887,15 +929,14 @@ body {
 .ev-exec-buy {
   background: var(--primary-muted);
   color: #5a9cff;
-  border-color: rgba(11, 74, 213, 0.10);
+  border-color: rgba(11, 74, 213, 0.1);
 }
 
 .ev-exec-sell {
   background: var(--warning-muted);
   color: var(--warning);
-  border-color: rgba(214, 158, 46, 0.10);
+  border-color: rgba(214, 158, 46, 0.1);
 }
-
 
 /* --- Playback Controls -------------------------------------------- */
 .playback-controls {
@@ -976,7 +1017,6 @@ body {
   color: #4a8eff;
   vertical-align: middle;
 }
-
 
 /* --- Responsive --------------------------------------------------- */
 @media (max-width: 900px) {

@@ -21,7 +21,13 @@ from qrsdp_reader import load_manifest, read_day, read_header
 logger = logging.getLogger("qrsdp_api")
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-RUN_BIN = REPO_ROOT / "build" / "qrsdp_run"
+_BIN_BASENAME = "qrsdp_run.exe" if sys.platform.startswith("win") else "qrsdp_run"
+_BIN_CANDIDATES = [
+    REPO_ROOT / "build" / _BIN_BASENAME,
+    REPO_ROOT / "build" / "Debug" / _BIN_BASENAME,
+    REPO_ROOT / "build" / "Release" / _BIN_BASENAME,
+]
+RUN_BIN = next((p for p in _BIN_CANDIDATES if p.exists()), _BIN_CANDIDATES[0])
 OUTPUT_DIR = REPO_ROOT / "output" / "api_sims"
 
 SYMBOL_RE = re.compile(r"^[A-Z0-9]{1,8}$")
